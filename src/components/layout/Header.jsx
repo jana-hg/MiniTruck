@@ -61,16 +61,19 @@ export default function Header() {
             <Icon name={isDark ? 'light_mode' : 'dark_mode'} size={16} />
           </button>
 
-          {/* Hamburger menu */}
+          {/* Profile avatar */}
           {isAuthenticated && (
             <button onClick={() => setMenuOpen(!menuOpen)}
               style={{
-                width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', border: 'none',
-                background: menuOpen ? C.accent : (isDark ? '#18181B' : '#F1F5F9'),
-                color: menuOpen ? (isDark ? '#000' : '#fff') : C.sub,
+                width: 36, height: 36, borderRadius: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', border: menuOpen ? `2px solid ${C.accent}` : `2px solid transparent`,
+                background: isDark ? 'linear-gradient(135deg, #FFD700, #FF8C00)' : 'linear-gradient(135deg, #3B82F6, #6366F1)',
+                color: isDark ? '#000' : '#fff', fontSize: 14, fontWeight: 800, letterSpacing: '-0.02em',
+                boxShadow: menuOpen ? `0 0 0 3px ${C.accent}30` : 'none',
+                transition: 'all 0.2s ease',
+                padding: 0,
               }}>
-              <Icon name={menuOpen ? 'close' : 'menu'} size={20} />
+              {user?.name ? user.name.charAt(0).toUpperCase() : <Icon name="person" size={18} />}
             </button>
           )}
 

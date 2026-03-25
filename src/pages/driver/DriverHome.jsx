@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { drivers as driversApi, bookings as bookingsApi } from '../../services/api';
+import { drivers as driversApi, bookings as bookingsApi, geo } from '../../services/api';
 import Icon from '../../components/ui/Icon';
 
 import MapView from '../../components/map/MapView';
+import { createOriginIcon, createDestinationIcon } from '../../components/map/MapView';
 
 export default function DriverHome() {
   const { user } = useAuth();
@@ -15,6 +16,8 @@ export default function DriverHome() {
   const [pendingJobs, setPendingJobs] = useState([]);
   const [toggling, setToggling] = useState(false);
   const [expandedJob, setExpandedJob] = useState(null);
+  const [routeCache, setRouteCache] = useState({}); // { [jobId]: { coords, distanceKm, durationMin } }
+  const [driverLoc, setDriverLoc] = useState(null);
 
   const C = {
     bg: isDark ? '#09090B' : '#F1F5F9',
@@ -36,11 +39,43 @@ export default function DriverHome() {
     bookingsApi.getBookings({}).then(d => { if (Array.isArray(d)) { const a = d.find(b => b.driverId === user.id && b.status === 'in-transit'); if (a) setActiveJob(a); }}).catch(() => {});
   }, [user]);
 
+  const [locPopup, setLocPopup] = useState(false);
+
   const toggleAvailability = () => {
+    if (!available) {
+      // Show location permission popup first
+      setLocPopup(true);
+    } else {
+      // Going offline
+      setToggling(true);
+      driversApi.toggleAvailability(user.id, { available: false })
+        .then(d => { setAvailable(d.available); setDriver(d); })
+        .finally(() => setToggling(false));
+    }
+  };
+
+  const confirmGoOnline = () => {
+    if (!navigator.geolocation) {
+      setLocPopup(false);
+      return;
+    }
     setToggling(true);
-    driversApi.toggleAvailability(user.id, { available: !available })
-      .then(d => { setAvailable(d.available); setDriver(d); })
-      .finally(() => setToggling(false));
+    setLocPopup(false);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setDriverLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        driversApi.updateLocation(user.id, pos.coords.latitude, pos.coords.longitude).catch(() => {});
+        driversApi.toggleAvailability(user.id, { available: true })
+          .then(d => { setAvailable(d.available); setDriver(d); })
+          .finally(() => setToggling(false));
+      },
+      () => {
+        setToggling(false);
+        // Location denied — show popup again with error
+        setLocPopup('denied');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   const acceptJob = (id) => {
@@ -63,6 +98,46 @@ export default function DriverHome() {
     fetch(`/api/bookings/${activeJob.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) })
       .then(() => setActiveJob(null)).catch(() => {});
   };
+
+  // Fetch route when a job is expanded or active
+  const fetchRoute = (job) => {
+    if (!job || routeCache[job.id]) return;
+    if (!job.pickup?.lat || !job.dropoff?.lat) return;
+    geo.getRoute(job.pickup.lat, job.pickup.lng, job.dropoff.lat, job.dropoff.lng)
+      .then(data => {
+        const coords = data.geometry?.coordinates?.map(c => [c[1], c[0]]) || [];
+        setRouteCache(prev => ({ ...prev, [job.id]: { coords, distanceKm: data.distanceKm, durationMin: data.durationMin } }));
+      }).catch(() => {});
+  };
+
+  // Fetch route when expanding a pending job
+  useEffect(() => {
+    if (expandedJob) {
+      const job = pendingJobs.find(j => j.id === expandedJob);
+      if (job) fetchRoute(job);
+    }
+  }, [expandedJob]);
+
+  // Fetch route for active job
+  useEffect(() => {
+    if (activeJob) fetchRoute(activeJob);
+  }, [activeJob]);
+
+  // Only track & send location when driver is ONLINE
+  useEffect(() => {
+    if (!available || !user?.id || !navigator.geolocation) return;
+    let watchId;
+    const sendLocation = (lat, lng) => {
+      setDriverLoc({ lat, lng });
+      driversApi.updateLocation(user.id, lat, lng).catch(() => {});
+    };
+    watchId = navigator.geolocation.watchPosition(
+      pos => sendLocation(pos.coords.latitude, pos.coords.longitude),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+    return () => { if (watchId != null) navigator.geolocation.clearWatch(watchId); };
+  }, [available, user?.id]);
 
   const stats = driver?.stats || {};
 
@@ -94,6 +169,66 @@ export default function DriverHome() {
         </button>
       </div>
 
+      {/* Location Permission Popup */}
+      {locPopup && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 20 }} onClick={() => { setLocPopup(false); setToggling(false); }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxWidth: 340, background: C.card, borderRadius: 20, overflow: 'hidden',
+            boxShadow: isDark ? '0 8px 40px rgba(0,0,0,0.6)' : '0 8px 40px rgba(0,0,0,0.15)',
+            border: `1px solid ${C.border}`,
+          }}>
+            {/* Icon */}
+            <div style={{ padding: '28px 24px 16px', textAlign: 'center' }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: 20, margin: '0 auto 16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: locPopup === 'denied'
+                  ? (isDark ? 'rgba(239,68,68,0.1)' : '#FEF2F2')
+                  : (isDark ? 'rgba(59,130,246,0.1)' : '#EFF6FF'),
+              }}>
+                <Icon name={locPopup === 'denied' ? 'location_off' : 'location_on'} filled size={32}
+                  style={{ color: locPopup === 'denied' ? '#EF4444' : '#3B82F6' }} />
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 8 }}>
+                {locPopup === 'denied' ? 'Location Access Denied' : 'Turn On Location'}
+              </div>
+              <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
+                {locPopup === 'denied'
+                  ? 'Location access was denied. Please enable location in your browser settings and try again.'
+                  : 'To go online and receive trip requests, we need access to your location. Your live location will be shared with customers for tracking.'}
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div style={{ padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {locPopup === 'denied' ? (
+                <>
+                  <button onClick={() => { setLocPopup(false); confirmGoOnline(); }}
+                    style={{ width: '100%', padding: '14px 0', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 800, background: '#3B82F6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <Icon name="refresh" size={18} /> Try Again
+                  </button>
+                  <button onClick={() => { setLocPopup(false); setToggling(false); }}
+                    style={{ width: '100%', padding: '12px 0', borderRadius: 12, border: `1.5px solid ${C.border}`, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: 'transparent', color: C.sub }}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={confirmGoOnline}
+                    style={{ width: '100%', padding: '14px 0', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 800, background: C.green, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 2px 10px rgba(16,185,129,0.3)' }}>
+                    <Icon name="location_on" size={18} /> Allow & Go Online
+                  </button>
+                  <button onClick={() => { setLocPopup(false); setToggling(false); }}
+                    style={{ width: '100%', padding: '12px 0', borderRadius: 12, border: `1.5px solid ${C.border}`, cursor: 'pointer', fontSize: 13, fontWeight: 600, background: 'transparent', color: C.sub }}>
+                    Not Now
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Quick Stats (2x2 grid for mobile) ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
         {[
@@ -112,8 +247,15 @@ export default function DriverHome() {
         ))}
       </div>
 
-      {/* ── Active Job (with map) ── */}
-      {activeJob && (
+      {/* ── Active Job ── */}
+      {activeJob && (() => {
+        const activeRoute = routeCache[activeJob.id];
+        const openGoogleNav = () => {
+          const origin = driverLoc ? `${driverLoc.lat},${driverLoc.lng}` : (activeJob.pickup?.lat ? `${activeJob.pickup.lat},${activeJob.pickup.lng}` : '');
+          const dest = activeJob.dropoff?.lat ? `${activeJob.dropoff.lat},${activeJob.dropoff.lng}` : '';
+          if (origin && dest) window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=driving`, '_blank');
+        };
+        return (
         <div style={{ background: C.card, border: `2px solid ${C.green}`, borderRadius: 16, overflow: 'hidden', marginBottom: 20, boxShadow: `0 4px 16px ${C.green}20` }}>
           {/* Header */}
           <div style={{ padding: '12px 16px', background: isDark ? 'rgba(16,185,129,0.08)' : '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -124,20 +266,17 @@ export default function DriverHome() {
             <div style={{ fontSize: 18, fontWeight: 900, color: C.text }}>₹{activeJob.fare?.total?.toFixed(0)}</div>
           </div>
 
-          {/* Map */}
-          <div style={{ height: 200 }}>
-            <MapView
-              center={[activeJob.pickup?.lat || 19, activeJob.pickup?.lng || 72]}
-              zoom={6}
-              markers={[
-                { lat: activeJob.pickup?.lat, lng: activeJob.pickup?.lng, label: 'P' },
-                { lat: activeJob.dropoff?.lat, lng: activeJob.dropoff?.lng, label: 'D' },
-              ]}
-              origin={activeJob.pickup?.lat ? [activeJob.pickup.lat, activeJob.pickup.lng] : null}
-              destination={activeJob.dropoff?.lat ? [activeJob.dropoff.lat, activeJob.dropoff.lng] : null}
-              className="w-full h-full"
-            />
-          </div>
+          {/* Route info chips */}
+          {activeRoute && (
+            <div style={{ display: 'flex', gap: 8, padding: '12px 16px 0', flexWrap: 'wrap' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', color: C.green }}>
+                <Icon name="straighten" size={12} />{activeRoute.distanceKm} km
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', color: C.green }}>
+                <Icon name="schedule" size={12} />{activeRoute.durationMin} min
+              </span>
+            </div>
+          )}
 
           {/* Route details */}
           <div style={{ padding: 16 }}>
@@ -168,14 +307,37 @@ export default function DriverHome() {
               ))}
             </div>
 
-            {/* Complete button */}
-            <button onClick={completeJob}
-              style={{ width: '100%', padding: '14px 0', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 15, fontWeight: 800, background: C.green, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 2px 10px rgba(16,185,129,0.3)' }}>
-              <Icon name="check_circle" size={20} /> Complete Delivery
+            {/* Start Navigation → Google Maps turn-by-turn */}
+            <button onClick={openGoogleNav}
+              style={{ width: '100%', padding: '14px 0', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 800, background: C.green, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 2px 10px rgba(16,185,129,0.3)', marginBottom: 10 }}>
+              <Icon name="navigation" size={18} /> Start Navigation
             </button>
+
+            {/* Quick actions: Call, Share, Complete */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => window.open('tel:+911234567890', '_self')}
+                style={{
+                  flex: 1, padding: '12px 0', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${C.border}`, background: 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  fontSize: 12, fontWeight: 700, color: C.green,
+                }}>
+                <Icon name="call" size={16} /> Call
+              </button>
+              <button onClick={completeJob}
+                style={{
+                  flex: 1.2, padding: '12px 0', borderRadius: 12, cursor: 'pointer', border: 'none',
+                  background: isDark ? '#27272A' : '#F1F5F9',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  fontSize: 12, fontWeight: 800, color: C.text,
+                }}>
+                <Icon name="check_circle" size={16} style={{ color: C.green }} /> Complete
+              </button>
+            </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Incoming Trip Requests ── */}
       {available && pendingJobs.length > 0 && (
@@ -215,25 +377,39 @@ export default function DriverHome() {
                   </div>
 
                   {/* Expanded: Map + Actions */}
-                  {isExpanded && (
+                  {isExpanded && (() => {
+                    const jobRoute = routeCache[j.id];
+                    return (
                     <div>
-                      {/* Map showing pickup and dropoff */}
+                      {/* Map showing route */}
                       <div style={{ height: 180, borderTop: `1px solid ${C.border}` }}>
                         <MapView
                           center={j.pickup?.lat ? [j.pickup.lat, j.pickup.lng] : [19, 72]}
                           zoom={6}
                           markers={[
-                            ...(j.pickup?.lat ? [{ lat: j.pickup.lat, lng: j.pickup.lng }] : []),
-                            ...(j.dropoff?.lat ? [{ lat: j.dropoff.lat, lng: j.dropoff.lng }] : []),
+                            ...(j.pickup?.lat ? [{ lat: j.pickup.lat, lng: j.pickup.lng, icon: createOriginIcon() }] : []),
+                            ...(j.dropoff?.lat ? [{ lat: j.dropoff.lat, lng: j.dropoff.lng, icon: createDestinationIcon() }] : []),
                           ]}
-                          origin={j.pickup?.lat ? [j.pickup.lat, j.pickup.lng] : null}
-                          destination={j.dropoff?.lat ? [j.dropoff.lat, j.dropoff.lng] : null}
+                          route={jobRoute?.coords || []}
+                          fitMarkers={true}
                           className="w-full h-full"
                         />
                       </div>
 
                       {/* Route details */}
                       <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
+                        {/* Distance & duration chips */}
+                        {jobRoute && (
+                          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: C.accentBg, color: C.accent }}>
+                              <Icon name="straighten" size={13} />{jobRoute.distanceKm} km
+                            </span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: C.accentBg, color: C.accent }}>
+                              <Icon name="schedule" size={13} />{jobRoute.durationMin} min
+                            </span>
+                          </div>
+                        )}
+
                         <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 2 }}>
                             <div style={{ width: 8, height: 8, borderRadius: 4, background: C.accent }} />
@@ -268,7 +444,8 @@ export default function DriverHome() {
                         </div>
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -297,6 +474,7 @@ export default function DriverHome() {
           </button>
         </div>
       )}
+
     </div>
   );
 }

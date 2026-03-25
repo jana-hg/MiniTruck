@@ -80,19 +80,45 @@ export default function HomeBooking() {
       .catch(() => setBooking(false));
   };
 
-  // Handle map tap to select location
-  const handleMapSelect = async (lat, lng) => {
-    if (!mapPicker) return;
+  // Handle setting a location from coordinates (GPS or map)
+  const handleSetLocation = async (lat, lng, type) => {
     const loc = { lat, lng, address: `${lat.toFixed(4)}, ${lng.toFixed(4)}` };
-    // Try reverse geocode
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, { headers: { 'User-Agent': 'MiniTruck/1.0' } });
       const data = await res.json();
       if (data.display_name) loc.address = data.display_name;
     } catch {}
     const short = loc.address.split(',').slice(0, 2).join(',');
-    if (mapPicker === 'pickup') { setPickup(loc); setPickupQuery(short); }
+    if (type === 'pickup') { setPickup(loc); setPickupQuery(short); }
     else { setDropoff(loc); setDropoffQuery(short); }
+  };
+
+  // Use current GPS location
+  const useCurrentLocation = (type) => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      pos => handleSetLocation(pos.coords.latitude, pos.coords.longitude, type),
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  // Open Google Maps to pick a location, then user copies coords or we use Place Picker
+  const openGoogleMapsPicker = (type) => {
+    // On mobile, opening Google Maps lets user search/browse, but we can't get data back.
+    // Instead, use the in-app map picker which works seamlessly.
+    setMapPicker(type);
+    setMapPickerCenter(
+      type === 'pickup'
+        ? (pickup ? [pickup.lat, pickup.lng] : [19.076, 72.877])
+        : (dropoff ? [dropoff.lat, dropoff.lng] : pickup ? [pickup.lat, pickup.lng] : [19.076, 72.877])
+    );
+  };
+
+  // Handle map tap to select location
+  const handleMapSelect = async (lat, lng) => {
+    if (!mapPicker) return;
+    await handleSetLocation(lat, lng, mapPicker);
     setMapPicker(null);
   };
 
@@ -124,10 +150,14 @@ export default function HomeBooking() {
         </div>
         {/* Pickup */}
         <div style={{ position: 'relative', marginBottom: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 10, height: 10, borderRadius: 5, background: '#10B981', flexShrink: 0 }} />
             <input placeholder="Pickup location..." value={pickupQuery} onChange={e => { setPickupQuery(e.target.value); setPickup(null); setShowMap(false); }} style={{ ...inp, flex: 1, paddingLeft: 0, border: 'none', borderBottom: `1px solid ${C.border}`, borderRadius: 0 }} />
-            <button onClick={() => { setMapPicker('pickup'); setMapPickerCenter(pickup ? [pickup.lat, pickup.lng] : [19.076, 72.877]); }}
+            <button onClick={() => useCurrentLocation('pickup')} title="Use my location"
+              style={{ width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1px solid ${C.border}`, background: isDark ? 'rgba(66,133,244,0.1)' : '#EFF6FF', color: '#4285F4', flexShrink: 0 }}>
+              <Icon name="my_location" size={16} />
+            </button>
+            <button onClick={() => openGoogleMapsPicker('pickup')} title="Pick on map"
               style={{ width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1px solid ${C.border}`, background: C.accentBg, color: C.accent, flexShrink: 0 }}>
               <Icon name="map" size={16} />
             </button>
@@ -136,10 +166,10 @@ export default function HomeBooking() {
         </div>
         {/* Dropoff */}
         <div style={{ position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 10, height: 10, borderRadius: 5, background: '#3B82F6', flexShrink: 0 }} />
             <input placeholder="Drop-off location..." value={dropoffQuery} onChange={e => { setDropoffQuery(e.target.value); setDropoff(null); setShowMap(false); }} style={{ ...inp, flex: 1, paddingLeft: 0, border: 'none', borderBottom: `1px solid ${C.border}`, borderRadius: 0 }} />
-            <button onClick={() => { setMapPicker('dropoff'); setMapPickerCenter(dropoff ? [dropoff.lat, dropoff.lng] : pickup ? [pickup.lat, pickup.lng] : [19.076, 72.877]); }}
+            <button onClick={() => openGoogleMapsPicker('dropoff')} title="Pick on map"
               style={{ width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1px solid ${C.border}`, background: C.accentBg, color: C.accent, flexShrink: 0 }}>
               <Icon name="map" size={16} />
             </button>
@@ -213,7 +243,26 @@ export default function HomeBooking() {
           <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Load Details</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-          <div><div style={lbl}>Load Type</div><select value={loadType} onChange={e => setLoadType(e.target.value)} style={inp}>{LOAD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+          <div>
+            <div style={lbl}>Load Type</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {LOAD_TYPES.map(t => {
+                const sel = loadType === t;
+                const ltIcon = { General: 'package_2', Fragile: 'warning', Perishable: 'eco', Electronics: 'devices', Furniture: 'chair', Machinery: 'precision_manufacturing' }[t] || 'inventory_2';
+                return (
+                  <button key={t} onClick={() => setLoadType(t)} style={{
+                    flex: '1 1 calc(33.33% - 6px)', minWidth: 90, padding: '10px 6px', borderRadius: 10,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer',
+                    border: sel ? `2px solid ${C.accent}` : `1px solid ${C.border}`,
+                    background: sel ? C.accentBg : 'transparent', transition: 'all 0.15s',
+                  }}>
+                    <Icon name={ltIcon} size={20} style={{ color: sel ? C.accent : C.muted }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: sel ? C.accent : C.sub }}>{t}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div><div style={lbl}>Weight (KG)</div><input type="number" placeholder="500" value={weight} onChange={e => setWeight(e.target.value)} style={inp} /></div>
         </div>
         <div style={{ marginBottom: 12 }}>
@@ -222,7 +271,41 @@ export default function HomeBooking() {
             <button key={s} onClick={() => setSize(s)} style={{ flex: '1 1 80px', padding: '10px 0', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', border: size === s ? `2px solid ${C.accent}` : `1px solid ${C.border}`, background: size === s ? C.accentBg : 'transparent', color: size === s ? C.accent : C.sub }}>{s}</button>
           ))}</div>
         </div>
-        <div style={{ marginBottom: 12 }}><div style={lbl}>Handling</div><select value={handling} onChange={e => setHandling(e.target.value)} style={inp}>{HANDLING_PROFILES.map(h => <option key={h.id} value={h.id}>{h.label}</option>)}</select></div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={lbl}>Handling</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {HANDLING_PROFILES.map(h => {
+              const sel = handling === h.id;
+              const hIcon = { standard: 'package_2', fragile: 'warning', hazmat: 'science', temperature: 'thermostat', oversized: 'open_with' }[h.id] || 'inventory_2';
+              const hDesc = { standard: 'Normal cargo, no special care needed', fragile: 'Extra padding & careful transport', hazmat: 'Certified hazmat handling', temperature: 'Climate-controlled vehicle', oversized: 'Special loading equipment' }[h.id] || '';
+              const hColor = { standard: isDark ? '#A1A1AA' : '#64748B', fragile: '#F59E0B', hazmat: '#EF4444', temperature: '#06B6D4', oversized: '#8B5CF6' }[h.id] || C.sub;
+              return (
+                <button key={h.id} onClick={() => setHandling(h.id)} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12,
+                  cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+                  background: sel ? (isDark ? `${hColor}12` : `${hColor}0A`) : 'transparent',
+                  border: sel ? `2px solid ${hColor}` : `1px solid ${C.border}`,
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    background: sel ? `${hColor}18` : (isDark ? '#27272A' : '#F1F5F9'),
+                  }}>
+                    <Icon name={hIcon} size={18} style={{ color: sel ? hColor : C.muted }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: sel ? C.text : C.sub }}>{h.label}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{hDesc}</div>
+                  </div>
+                  {sel && (
+                    <div style={{ width: 22, height: 22, borderRadius: 11, background: hColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Icon name="check" size={14} style={{ color: '#fff' }} />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <div><div style={lbl}>Notes (optional)</div><textarea rows={2} placeholder="Special instructions..." value={description} onChange={e => setDescription(e.target.value)} style={{ ...inp, resize: 'none' }} /></div>
       </div>
 
@@ -290,20 +373,28 @@ export default function HomeBooking() {
 
       {/* ── Fullscreen Map Picker Overlay ── */}
       {mapPicker && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', background: C.bg }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: C.bg }}>
           {/* Top bar */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: C.card, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: C.card, borderBottom: `1px solid ${C.border}`, flexShrink: 0, zIndex: 10000 }}>
             <button onClick={() => setMapPicker(null)}
               style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: 'none', background: isDark ? '#27272A' : '#F1F5F9', color: C.sub }}>
-              <Icon name="arrow_back" size={20} />
+              <Icon name="close" size={20} />
             </button>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
-                Select {mapPicker === 'pickup' ? 'Pickup' : 'Drop-off'} Location
+                Select {mapPicker === 'pickup' ? 'Pickup' : 'Drop-off'}
               </div>
               <div style={{ fontSize: 11, color: C.muted }}>Tap on the map to choose</div>
             </div>
-            <div style={{ width: 36 }} />
+            {/* Open in Google Maps */}
+            <button onClick={() => {
+              const lat = mapPickerCenter[0];
+              const lng = mapPickerCenter[1];
+              window.open(`https://www.google.com/maps/@${lat},${lng},15z`, '_blank');
+            }}
+              style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: 'none', background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', color: '#10B981' }}>
+              <Icon name="open_in_new" size={18} />
+            </button>
           </div>
 
           {/* Map */}
@@ -321,21 +412,57 @@ export default function HomeBooking() {
             {/* Center pin indicator */}
             <div style={{
               position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -100%)',
-              pointerEvents: 'none', zIndex: 10,
+              pointerEvents: 'none', zIndex: 10000,
             }}>
               <Icon name="location_on" filled size={40}
                 style={{ color: mapPicker === 'pickup' ? '#10B981' : '#3B82F6', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }} />
             </div>
+
+            {/* GPS locate button */}
+            <button onClick={() => {
+              if (!navigator.geolocation) return;
+              navigator.geolocation.getCurrentPosition(
+                pos => {
+                  handleMapSelect(pos.coords.latitude, pos.coords.longitude);
+                },
+                () => {},
+                { enableHighAccuracy: true, timeout: 10000 }
+              );
+            }}
+              style={{
+                position: 'absolute', bottom: 16, left: 16, zIndex: 10000,
+                padding: '10px 16px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                background: isDark ? '#18181BEE' : '#FFFFFFEE', backdropFilter: 'blur(8px)',
+                boxShadow: isDark ? '0 2px 12px rgba(0,0,0,0.5)' : '0 2px 10px rgba(0,0,0,0.15)',
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontSize: 12, fontWeight: 700, color: '#4285F4',
+              }}>
+              <Icon name="my_location" size={16} /> Use My Location
+            </button>
+
+            {/* Google Maps button */}
+            <button onClick={() => {
+              const lat = mapPickerCenter[0];
+              const lng = mapPickerCenter[1];
+              window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
+            }}
+              style={{
+                position: 'absolute', bottom: 16, right: 16, zIndex: 10000,
+                padding: '10px 16px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                background: isDark ? '#18181BEE' : '#FFFFFFEE', backdropFilter: 'blur(8px)',
+                boxShadow: isDark ? '0 2px 12px rgba(0,0,0,0.5)' : '0 2px 10px rgba(0,0,0,0.15)',
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontSize: 12, fontWeight: 700, color: '#10B981',
+              }}>
+              <Icon name="map" size={16} /> Google Maps
+            </button>
           </div>
 
-          {/* Bottom: Confirm center location */}
-          <div style={{ padding: '12px 16px', background: C.card, borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
-            <div style={{ fontSize: 11, color: C.muted, textAlign: 'center', marginBottom: 10 }}>
-              Tap on the map or use the center pin
-            </div>
+          {/* Bottom: Confirm */}
+          <div style={{ padding: '12px 16px', background: C.card, borderTop: `1px solid ${C.border}`, flexShrink: 0, zIndex: 10000 }}>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setMapPicker(null)}
-                style={{ flex: 1, padding: '13px 0', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 600, background: 'transparent', border: `1px solid ${C.border}`, color: C.sub }}>
+                style={{ padding: '13px 20px', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 600, background: 'transparent', border: `1px solid ${C.border}`, color: C.sub }}>
                 Cancel
               </button>
               <button onClick={() => {

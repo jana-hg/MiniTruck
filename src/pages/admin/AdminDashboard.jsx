@@ -47,6 +47,15 @@ export default function AdminDashboard() {
     fetch('/api/users').then(r => r.json()).then(d => Array.isArray(d) && setUsers(d)).catch(() => {});
   }, []);
 
+  // Poll fleet & driver locations every 10s for live map updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fleetApi.getFleet().then(d => Array.isArray(d) && setFleetData(d)).catch(() => {});
+      driversApi.getDrivers().then(d => Array.isArray(d) && setDriversList(d)).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   const totalRevenue = paymentsList.reduce((s, p) => s + (p.amount || 0), 0);
   const activeRides = bookings.filter(b => b.status === 'in-transit' || b.status === 'confirmed').length;
   const completedRides = bookings.filter(b => b.status === 'completed').length;
@@ -677,8 +686,35 @@ function DriversTab({ driversList, C, isDark, mob }) {
   const [form, setForm] = useState({ name: '', phone: '', truckId: '', truckType: 'medium', make: '', model: '', year: '2024', plateNumber: '' });
   const [drivers, setDrivers] = useState(driversList);
   const [saving, setSaving] = useState(false);
+  const [approvingId, setApprovingId] = useState(null);
 
   useEffect(() => { setDrivers(driversList); }, [driversList]);
+
+  const pendingDrivers = drivers.filter(d => d.approved === false && d.status === 'pending-approval');
+
+  const refreshDrivers = async () => {
+    try {
+      const res = await fetch('/api/drivers');
+      const data = await res.json();
+      if (Array.isArray(data)) setDrivers(data);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleApproval = async (id, approve) => {
+    setApprovingId(id);
+    try {
+      const body = approve
+        ? { approved: true }
+        : { approved: false, reason: 'Rejected by admin' };
+      await fetch(`/api/drivers/${id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await refreshDrivers();
+    } catch (e) { console.error(e); }
+    setApprovingId(null);
+  };
 
   const openAdd = () => { setForm({ name: '', phone: '', truckId: '', truckType: 'medium', make: '', model: '', year: '2024', plateNumber: '' }); setEditDriver(null); setShowAdd(true); };
   const openEdit = (d) => {
@@ -711,6 +747,111 @@ function DriversTab({ driversList, C, isDark, mob }) {
           <Icon name="person_add" size={18} /> Add Driver
         </button>
       </div>
+
+      {/* Pending Approvals */}
+      {pendingDrivers.length > 0 && (
+        <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, boxShadow: C.shadow, padding: mob ? 16 : 20, marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <Icon name="pending_actions" size={22} style={{ color: isDark ? '#FBBF24' : '#F59E0B' }} />
+            <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Pending Approvals</span>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20,
+              background: isDark ? 'rgba(251,191,36,0.15)' : '#FEF3C7',
+              color: isDark ? '#FBBF24' : '#B45309',
+            }}>{pendingDrivers.length}</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 }}>
+            {pendingDrivers.map(pd => (
+              <div key={pd.id} style={{
+                borderRadius: 12, border: `1px solid ${isDark ? 'rgba(251,191,36,0.2)' : '#FDE68A'}`,
+                background: isDark ? 'rgba(251,191,36,0.04)' : '#FFFEF5', padding: 16,
+              }}>
+                {/* Header: picture + name */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  {pd.profilePicture ? (
+                    <img src={pd.profilePicture.startsWith('data:') ? pd.profilePicture : pd.profilePicture}
+                      alt={pd.name} style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                  ) : (
+                    <div style={{ width: 44, height: 44, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(52,211,153,0.1)' : '#ECFDF5' }}>
+                      <Icon name="person" filled size={22} style={{ color: isDark ? '#34D399' : '#10B981' }} />
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pd.name}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{pd.phone}</div>
+                  </div>
+                  {pd.city && <span style={{ fontSize: 11, fontWeight: 600, color: C.sub, background: isDark ? '#27272A' : '#F1F5F9', padding: '3px 8px', borderRadius: 6 }}>{pd.city}</span>}
+                </div>
+
+                {/* Vehicle info */}
+                {(pd.vehicleDetails || pd.vehicleType) && (
+                  <div style={{ padding: '10px 12px', borderRadius: 8, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}`, marginBottom: 10 }}>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Vehicle Info</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
+                      {pd.vehicleType && <span>{pd.vehicleType} </span>}
+                      {pd.vehicleDetails?.model && <span>- {pd.vehicleDetails.model} </span>}
+                      {pd.vehicleDetails?.make && <span>({pd.vehicleDetails.make})</span>}
+                    </div>
+                    {(pd.vehicleDetails?.plateNumber || pd.registrationNumber) && (
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Reg: {pd.vehicleDetails?.plateNumber || pd.registrationNumber}</div>
+                    )}
+                  </div>
+                )}
+
+                {/* License info */}
+                {(pd.licenseNumber || pd.licenseExpiry) && (
+                  <div style={{ padding: '10px 12px', borderRadius: 8, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}`, marginBottom: 10 }}>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>License</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      {pd.licenseNumber && <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{pd.licenseNumber}</span>}
+                      {pd.licenseExpiry && <span style={{ fontSize: 11, color: C.muted }}>Exp: {new Date(pd.licenseExpiry).toLocaleDateString()}</span>}
+                    </div>
+                  </div>
+                )}
+
+                {/* Vehicle picture */}
+                {pd.vehiclePicture && (
+                  <div style={{ marginBottom: 10 }}>
+                    <img src={pd.vehiclePicture.startsWith('data:') ? pd.vehiclePicture : pd.vehiclePicture}
+                      alt="Vehicle" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
+                  </div>
+                )}
+
+                {/* Applied date */}
+                {pd.appliedDate && (
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="calendar_today" size={13} /> Applied: {new Date(pd.appliedDate).toLocaleDateString()}
+                  </div>
+                )}
+
+                {/* Approve / Reject buttons */}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={() => handleApproval(pd.id, true)}
+                    disabled={approvingId === pd.id}
+                    style={{
+                      flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
+                      fontSize: 12, fontWeight: 700, background: '#10B981', color: '#fff',
+                      opacity: approvingId === pd.id ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}>
+                    <Icon name="check_circle" size={16} /> Approve
+                  </button>
+                  <button
+                    onClick={() => handleApproval(pd.id, false)}
+                    disabled={approvingId === pd.id}
+                    style={{
+                      flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
+                      fontSize: 12, fontWeight: 700, background: '#EF4444', color: '#fff',
+                      opacity: approvingId === pd.id ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}>
+                    <Icon name="cancel" size={16} /> Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>

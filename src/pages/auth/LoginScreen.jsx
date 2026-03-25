@@ -55,7 +55,7 @@ export default function LoginScreen({ role = 'customer' }) {
       if (step === 1 && formId && formPass) {
         const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: formId, password: formPass, role }) });
         const data = await res.json();
-        if (!res.ok || data.error) { setLoading(false); setError('Invalid credentials'); return; }
+        if (!res.ok || data.error) { setLoading(false); setError(data.error || 'Invalid credentials'); return; }
         login({ id: data.user?.id || formId, name: data.user?.name || formId }, role, data.token);
         setLoading(false); navigate(cfg.redirect);
       } else if (step === 2) {
@@ -131,7 +131,13 @@ export default function LoginScreen({ role = 'customer' }) {
 
         {/* Footer */}
         <div style={{ padding: '12px 24px', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>Secure Login</span>
+          {role === 'driver' ? (
+            <Link to="/register-driver" style={{ textDecoration: 'none', fontSize: 11, fontWeight: 600, color: clr }}>Register as Driver</Link>
+          ) : role === 'customer' ? (
+            <Link to="/register-user" style={{ textDecoration: 'none', fontSize: 11, fontWeight: 600, color: clr }}>Create Account</Link>
+          ) : (
+            <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>Secure Login</span>
+          )}
           <Link to="/login" style={{ textDecoration: 'none', fontSize: 11, fontWeight: 600, color: clr }}>Switch Portal</Link>
         </div>
       </motion.div>

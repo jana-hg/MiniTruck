@@ -10,9 +10,19 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
-const PORT = process.env.PORT || 5005;
+
 const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
-const DB_PATH = path.join(__dirname, 'db.json');
+
+// ── Database path: use /tmp for Vercel serverless (writable) ──
+const TMP_DB_PATH = '/tmp/db.json';
+const SOURCE_DB_PATH = path.join(process.cwd(), 'backend', 'db.json');
+
+// On cold start, copy the bundled db.json to /tmp if it doesn't exist
+if (!fs.existsSync(TMP_DB_PATH)) {
+  fs.copyFileSync(SOURCE_DB_PATH, TMP_DB_PATH);
+}
+
+const DB_PATH = TMP_DB_PATH;
 
 // ── Security middleware ──
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -24,9 +34,6 @@ const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error
 app.use('/api', limiter);
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many login attempts' } });
 app.use('/api/auth', authLimiter);
-
-// ── Frontend dist path ──
-const DIST_PATH = path.join(__dirname, '..', 'dist');
 
 // ── Database helpers ──
 let dbLock = false;
@@ -84,9 +91,8 @@ app.post('/api/otp/send', otpLimiter, async (req, res) => {
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
   otpStore[cleanPhone] = { otp, expiresAt };
-  console.log(`\n📱 OTP for ${cleanPhone}: ${otp}\n`);
+  console.log(`OTP for ${cleanPhone}: ${otp}`);
 
-  // OTP is logged in server console — return it in response for the app to show
   return res.json({ success: true, otp });
 });
 
@@ -104,7 +110,6 @@ app.post('/api/otp/verify', (req, res) => {
   }
   if (stored.otp !== otp) return res.status(400).json({ error: 'Invalid OTP. Please try again.' });
 
-  // OTP verified — clean up
   delete otpStore[cleanPhone];
   return res.json({ success: true, verified: true });
 });
@@ -127,7 +132,6 @@ app.post('/api/auth/login', async (req, res) => {
   if (role === 'driver' && user.status === 'rejected') {
     return res.status(403).json({ error: 'Your application was rejected' });
   }
-  // Support both hashed and plain passwords (migration)
   const valid = user.password.startsWith('$2') ? await bcrypt.compare(password, user.password) : password === user.password;
   if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
   const token = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: '8h' });
@@ -166,7 +170,6 @@ app.post('/api/users/register', (req, res) => {
   const { fullName, phone, email, profilePicture } = req.body;
   if (!fullName || !phone) return res.status(400).json({ error: 'Name and phone are required' });
 
-  // Check if phone already exists
   const exists = db.users.find(u => u.phone === phone);
   if (exists) return res.status(409).json({ error: 'User with this phone already exists' });
 
@@ -270,7 +273,6 @@ app.post('/api/bookings', (req, res) => {
     createdAt: new Date().toISOString(), completedAt: null
   };
   db.bookings.push(booking);
-  // Update user booking count
   const uIdx = db.users.findIndex(u => u.id === booking.userId);
   if (uIdx !== -1) db.users[uIdx].bookings = (db.users[uIdx].bookings || 0) + 1;
   writeDB(db);
@@ -287,31 +289,31 @@ app.patch('/api/bookings/:id', (req, res) => {
   return res.json(db.bookings[idx]);
 });
 
+// Tracking endpoint — converted from SSE to regular JSON for serverless compatibility
 app.get('/api/bookings/:id/track', (req, res) => {
   const db = readDB();
   const booking = db.bookings.find(b => b.id === req.params.id);
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
-  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-  const pickup = booking.pickup, dropoff = booking.dropoff;
+
+  const pickup = booking.pickup;
+  const dropoff = booking.dropoff;
+  const step = parseInt(req.query.step) || 0;
   const totalSteps = 30;
-  let step = 0;
-  const interval = setInterval(() => {
-    if (step > totalSteps) {
-      res.write(`data: ${JSON.stringify({ status: 'arrived', lat: dropoff.lat, lng: dropoff.lng })}\n\n`);
-      clearInterval(interval); res.end(); return;
-    }
-    const t = step / totalSteps;
-    res.write(`data: ${JSON.stringify({
-      step, totalSteps,
-      lat: parseFloat((pickup.lat + (dropoff.lat - pickup.lat) * t).toFixed(6)),
-      lng: parseFloat((pickup.lng + (dropoff.lng - pickup.lng) * t).toFixed(6)),
-      speed: parseFloat((45 + Math.random() * 30).toFixed(1)),
-      progress: parseFloat((t * 100).toFixed(1)),
-      status: step === totalSteps ? 'arrived' : 'in-transit'
-    })}\n\n`);
-    step++;
-  }, 3000);
-  req.on('close', () => clearInterval(interval));
+
+  if (step > totalSteps) {
+    return res.json({ status: 'arrived', lat: dropoff.lat, lng: dropoff.lng, step: totalSteps, totalSteps, progress: 100 });
+  }
+
+  const t = step / totalSteps;
+  return res.json({
+    step,
+    totalSteps,
+    lat: parseFloat((pickup.lat + (dropoff.lat - pickup.lat) * t).toFixed(6)),
+    lng: parseFloat((pickup.lng + (dropoff.lng - pickup.lng) * t).toFixed(6)),
+    speed: parseFloat((45 + Math.random() * 30).toFixed(1)),
+    progress: parseFloat((t * 100).toFixed(1)),
+    status: step >= totalSteps ? 'arrived' : 'in-transit'
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -328,7 +330,6 @@ app.post('/api/drivers/register', (req, res) => {
   const { name, phone, city, vehicleType, vehicleModel, vehicleRegNumber, vehicleYear, licenseNumber, licenseExpiry, profilePicture, vehiclePicture } = req.body;
   if (!name || !phone || !licenseNumber) return res.status(400).json({ error: 'Name, phone, and license number are required' });
 
-  // Check if phone or license already exists
   const exists = db.drivers.find(d => d.phone === phone || d.licenseNumber === licenseNumber);
   if (exists) return res.status(409).json({ error: 'Driver with this phone or license already exists' });
 
@@ -589,7 +590,6 @@ app.post('/api/ratings', (req, res) => {
   if (!userId || !driverId || !rating) return res.status(400).json({ error: 'userId, driverId, rating required' });
   const r = { id: `r${String(db.ratings.length + 1).padStart(2, '0')}`, userId, driverId, bookingId: bookingId || null, rating: Math.min(5, Math.max(1, parseInt(rating))), comment: comment || '', date: new Date().toISOString().split('T')[0] };
   db.ratings.push(r);
-  // Update driver avg rating
   const driverRatings = db.ratings.filter(rt => rt.driverId === driverId);
   const avg = driverRatings.reduce((s, rt) => s + rt.rating, 0) / driverRatings.length;
   const dIdx = db.drivers.findIndex(d => d.id === driverId);
@@ -695,27 +695,22 @@ app.post('/api/pricing/estimate', (req, res) => {
   const baseFare = truck.price;
   const distanceCharge = (distanceKm || 0) * truck.kmCharge;
 
-  // Weight surcharge (over 500kg)
   const w = parseFloat(weight) || 0;
   const weightSurcharge = w > 5000 ? 150 : w > 2000 ? 80 : w > 500 ? 30 : 0;
 
-  // Handling surcharge
   const handlingMap = { fragile: 50, hazmat: 120, temperature: 80, oversized: 100 };
   const handlingSurcharge = handlingMap[loadType?.toLowerCase()] || 0;
 
-  // Priority multiplier
   const priorityMap = { standard: 1.0, express: 1.5, urgent: 2.2 };
   const priorityMultiplier = priorityMap[priority] || 1.0;
 
-  // Surge (check current hour)
   const hour = new Date().getHours();
   const surgeMultiplier = (commission.surgeEnabled && commission.peakHours.includes(hour)) ? commission.surgeMultiplier : 1.0;
 
-  // Discount
   let discount = 0;
   let discountApplied = false;
   if (discountCode === 'FIRST50') { discount = 50; discountApplied = true; }
-  else if (discountCode === 'HAUL20') { discount = 0; discountApplied = true; } // 20% off applied below
+  else if (discountCode === 'HAUL20') { discount = 0; discountApplied = true; }
 
   let subtotal = (baseFare + distanceCharge + weightSurcharge + handlingSurcharge) * priorityMultiplier * surgeMultiplier;
   if (discountCode === 'HAUL20') { discount = subtotal * 0.20; }
@@ -786,7 +781,6 @@ app.post('/api/admin/refund', (req, res) => {
   if (bIdx === -1) return res.status(404).json({ error: 'Booking not found' });
   db.bookings[bIdx].status = 'cancelled';
   db.bookings[bIdx].payment = { ...db.bookings[bIdx].payment, status: 'refunded', method: 'refunded' };
-  // Refund to wallet
   const userId = db.bookings[bIdx].userId;
   const amount = db.bookings[bIdx].fare?.total || 0;
   const wIdx = db.wallet.findIndex(w => w.userId === userId);
@@ -824,28 +818,5 @@ app.get('/api/route', async (req, res) => {
   } catch (err) { return res.status(502).json({ error: 'Routing failed', details: err.message }); }
 });
 
-// ═══════════════════════════════════════════════════════════════
-//  SPA - serve static files + fallback to index.html
-// ═══════════════════════════════════════════════════════════════
-if (fs.existsSync(DIST_PATH)) {
-  // Serve static assets (JS, CSS, images, SVGs)
-  app.use(express.static(DIST_PATH, { index: false }));
-  // SPA fallback - any non-API GET returns index.html
-  app.use((req, res, next) => {
-    if (req.method === 'GET' && !req.path.startsWith('/api')) {
-      return res.sendFile('index.html', { root: DIST_PATH });
-    }
-    next();
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  START
-// ═══════════════════════════════════════════════════════════════
-app.listen(PORT, () => {
-  console.log(`\n  MINITRUCK running on http://localhost:${PORT}`);
-  console.log(`  Database: ${DB_PATH}`);
-  if (fs.existsSync(DIST_PATH)) console.log(`  Frontend: serving from ${DIST_PATH}`);
-  else console.log(`  Frontend: not built yet (run "npm run build" first)`);
-  console.log();
-});
+// Export for Vercel serverless
+module.exports = app;

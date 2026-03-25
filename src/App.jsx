@@ -8,6 +8,8 @@ import BottomNav from './components/layout/BottomNav';
 
 import PortalSwitcher from './pages/auth/PortalSwitcher';
 import LoginScreen from './pages/auth/LoginScreen';
+import DriverRegister from './pages/auth/DriverRegister';
+import UserRegister from './pages/auth/UserRegister';
 
 import HomeBooking from './pages/customer/HomeBooking';
 import MyBookings from './pages/customer/MyBookings';
@@ -62,6 +64,8 @@ function AppRoutes() {
               <Route path="/login-user" element={<LoginScreen role="customer" />} />
               <Route path="/login-driver" element={<LoginScreen role="driver" />} />
               <Route path="/login-admin" element={<LoginScreen role="admin" />} />
+              <Route path="/register-driver" element={<DriverRegister />} />
+              <Route path="/register-user" element={<UserRegister />} />
 
               {/* Customer */}
               <Route path="/" element={<ProtectedRoute allowedRoles={['customer']}><HomeBooking /></ProtectedRoute>} />

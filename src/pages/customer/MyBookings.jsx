@@ -32,6 +32,7 @@ export default function MyBookings() {
     });
   }, [user]);
 
+
   const filtered = bookings.filter(b => {
     if (filter === 'all') return true;
     if (filter === 'active') return b.status === 'confirmed' || b.status === 'in-transit';
@@ -49,6 +50,30 @@ export default function MyBookings() {
   };
 
   const box = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, boxShadow: C.shadow };
+
+  const statusAccent = (status) => {
+    if (status === 'confirmed') return isDark ? '#34D399' : '#059669';
+    if (status === 'in-transit') return isDark ? '#60A5FA' : '#2563EB';
+    if (status === 'completed') return isDark ? '#FFD700' : '#F59E0B';
+    if (status === 'cancelled') return isDark ? '#F87171' : '#DC2626';
+    return C.accent;
+  };
+
+  const statusGlow = (status) => {
+    if (status === 'confirmed') return isDark ? 'rgba(52,211,153,0.12)' : 'rgba(5,150,105,0.06)';
+    if (status === 'in-transit') return isDark ? 'rgba(96,165,250,0.12)' : 'rgba(37,99,235,0.06)';
+    if (status === 'completed') return isDark ? 'rgba(255,215,0,0.10)' : 'rgba(245,158,11,0.06)';
+    if (status === 'cancelled') return isDark ? 'rgba(248,113,113,0.10)' : 'rgba(220,38,38,0.04)';
+    return 'transparent';
+  };
+
+  const statusIcon = (status) => {
+    if (status === 'confirmed') return 'check_circle';
+    if (status === 'in-transit') return 'local_shipping';
+    if (status === 'completed') return 'verified';
+    if (status === 'cancelled') return 'cancel';
+    return 'circle';
+  };
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px 120px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -71,57 +96,122 @@ export default function MyBookings() {
       {filtered.length === 0 && <div style={{ ...box, padding: '48px 20px', textAlign: 'center' }}><Icon name="inventory_2" size={48} style={{ color: C.muted, marginBottom: 12 }} /><div style={{ fontSize: 14, color: C.sub }}>No bookings found</div></div>}
 
       {/* Bookings Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 16 }}>
-        {filtered.map(b => (
-          <div key={b.id} style={box}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div><div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{b.id}</div><div style={{ fontSize: 10, color: C.muted }}>{new Date(b.createdAt).toLocaleDateString()}</div></div>
-              <StatusBadge status={b.status} />
-            </div>
-            {/* Route */}
-            <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 4 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 4, background: C.accent }} />
-                <div style={{ width: 1, height: 22, background: C.border }} />
-                <div style={{ width: 8, height: 8, borderRadius: 4, background: '#3B82F6' }} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 20 }}>
+        {filtered.map(b => {
+          const accent = statusAccent(b.status);
+          const glow = statusGlow(b.status);
+          return (
+          <div key={b.id} style={{
+            background: C.card,
+            borderRadius: 18,
+            overflow: 'hidden',
+            boxShadow: isDark
+              ? `0 2px 8px rgba(0,0,0,0.3), 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04)`
+              : `0 1px 3px rgba(0,0,0,0.06), 0 6px 24px rgba(0,0,0,0.06)`,
+            border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}`,
+            position: 'relative',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = isDark ? `0 4px 16px rgba(0,0,0,0.4), 0 12px 40px rgba(0,0,0,0.3)` : `0 4px 12px rgba(0,0,0,0.08), 0 12px 36px rgba(0,0,0,0.1)`; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = isDark ? `0 2px 8px rgba(0,0,0,0.3), 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04)` : `0 1px 3px rgba(0,0,0,0.06), 0 6px 24px rgba(0,0,0,0.06)`; }}
+          >
+            {/* Top accent bar */}
+            <div style={{ height: 4, background: `linear-gradient(90deg, ${accent}, ${accent}88)` }} />
+
+            {/* Status glow background */}
+            <div style={{ position: 'absolute', top: 0, right: 0, width: 120, height: 120, borderRadius: '0 0 0 100%', background: `radial-gradient(circle at top right, ${glow}, transparent 70%)`, pointerEvents: 'none' }} />
+
+            <div style={{ padding: '18px 20px 16px' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: glow, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${accent}33` }}>
+                    <Icon name={statusIcon(b.status)} size={20} style={{ color: accent }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>{b.id}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{new Date(b.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                  </div>
+                </div>
+                <StatusBadge status={b.status} />
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.pickup?.address || 'Pickup'}</div>
-                <div style={{ fontSize: 12, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 14 }}>{b.dropoff?.address || 'Dropoff'}</div>
+
+              {/* Route */}
+              <div style={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: 12, padding: '14px 14px', marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 2 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 10, background: accent, boxShadow: `0 0 0 3px ${accent}22` }} />
+                    <div style={{ width: 2, height: 20, background: `linear-gradient(to bottom, ${accent}66, #3B82F666)`, borderRadius: 1 }} />
+                    <div style={{ width: 10, height: 10, borderRadius: 10, background: '#3B82F6', boxShadow: '0 0 0 3px rgba(59,130,246,0.15)' }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.pickup?.address || 'Pickup'}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 12 }}>{b.dropoff?.address || 'Dropoff'}</div>
+                  </div>
+                </div>
               </div>
-            </div>
-            {/* Cargo + Fare */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTop: `1px solid ${C.border}`, marginBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.sub }}>
-                <Icon name="inventory_2" size={14} />{b.cargo?.loadType || b.cargo?.type || '--'} · {b.cargo?.weight || '--'}
+
+              {/* Cargo + Fare */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="inventory_2" size={14} style={{ color: C.sub }} />
+                  </div>
+                  <span style={{ fontSize: 12, color: C.sub, fontWeight: 500 }}>{b.cargo?.loadType || b.cargo?.type || '--'} · {b.cargo?.weight || '--'}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                  <span style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>₹</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>{b.fare?.total?.toFixed(0) || '0'}</span>
+                </div>
               </div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>₹{b.fare?.total?.toFixed(2) || '0'}</div>
-            </div>
-            {/* Actions */}
-            <div style={{ display: 'flex', gap: 8, paddingTop: 10 }}>
-              {(b.status === 'confirmed' || b.status === 'in-transit') && (
-                <Link to={`/tracking/${b.id}`} style={{ textDecoration: 'none', flex: 1, padding: '8px 0', textAlign: 'center', borderRadius: 8, background: C.accentBg, color: C.accent, fontSize: 12, fontWeight: 600 }}>
-                  <Icon name="location_on" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Track
-                </Link>
-              )}
-              {b.status === 'completed' && (
-                <>
-                  <button onClick={() => { setRatingModal(b); setRatingValue(0); setRatingComment(''); }} style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: C.accentBg, color: C.accent, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
-                    <Icon name="star" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Rate
-                  </button>
-                  <a href={`/api/invoices/${b.id}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', flex: 1, padding: '8px 0', textAlign: 'center', borderRadius: 8, background: isDark ? '#27272A' : '#F1F5F9', color: C.sub, fontSize: 12, fontWeight: 600 }}>
-                    <Icon name="receipt" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Invoice
-                  </a>
-                </>
-              )}
-              {b.status === 'cancelled' && (
-                <Link to="/" style={{ textDecoration: 'none', flex: 1, padding: '8px 0', textAlign: 'center', borderRadius: 8, background: isDark ? '#27272A' : '#F1F5F9', color: C.sub, fontSize: 12, fontWeight: 600 }}>
-                  <Icon name="refresh" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Rebook
-                </Link>
-              )}
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 8, paddingTop: 10 }}>
+                {(b.status === 'confirmed' || b.status === 'in-transit') && (
+                  <Link to={`/tracking/${b.id}`} style={{
+                    textDecoration: 'none', flex: 1, padding: '10px 0', textAlign: 'center', borderRadius: 10,
+                    background: `linear-gradient(135deg, ${accent}18, ${accent}08)`,
+                    border: `1px solid ${accent}25`,
+                    color: accent, fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
+                  }}>
+                    <Icon name="location_on" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Track Live
+                  </Link>
+                )}
+                {b.status === 'completed' && (
+                  <>
+                    <button onClick={() => { setRatingModal(b); setRatingValue(0); setRatingComment(''); }} style={{
+                      flex: 1, padding: '10px 0', borderRadius: 10,
+                      background: `linear-gradient(135deg, ${accent}18, ${accent}08)`,
+                      border: `1px solid ${accent}25`,
+                      color: accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.02em',
+                    }}>
+                      <Icon name="star" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Rate Trip
+                    </button>
+                    <a href={`/api/invoices/${b.id}`} target="_blank" rel="noreferrer" style={{
+                      textDecoration: 'none', flex: 1, padding: '10px 0', textAlign: 'center', borderRadius: 10,
+                      background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+                      color: C.sub, fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
+                    }}>
+                      <Icon name="receipt" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Invoice
+                    </a>
+                  </>
+                )}
+                {b.status === 'cancelled' && (
+                  <Link to="/" style={{
+                    textDecoration: 'none', flex: 1, padding: '10px 0', textAlign: 'center', borderRadius: 10,
+                    background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+                    color: C.sub, fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
+                  }}>
+                    <Icon name="refresh" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Rebook
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Rating Modal */}
