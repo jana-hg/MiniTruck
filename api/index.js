@@ -3,7 +3,8 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
+const { randomBytes } = require('crypto');
+const uuidv4 = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ randomBytes(1)[0] & 15 >> c / 4).toString(16));
 const fs = require('fs');
 const path = require('path');
 const helmet = require('helmet');
@@ -15,11 +16,33 @@ const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(32).t
 
 // ── Database path: use /tmp for Vercel serverless (writable) ──
 const TMP_DB_PATH = '/tmp/db.json';
-const SOURCE_DB_PATH = path.join(process.cwd(), 'backend', 'db.json');
+const SOURCE_DB_PATH = path.join(__dirname, '..', 'backend', 'db.json');
 
 // On cold start, copy the bundled db.json to /tmp if it doesn't exist
 if (!fs.existsSync(TMP_DB_PATH)) {
-  fs.copyFileSync(SOURCE_DB_PATH, TMP_DB_PATH);
+  try {
+    fs.copyFileSync(SOURCE_DB_PATH, TMP_DB_PATH);
+  } catch (e) {
+    // Try alternate paths
+    const altPaths = [
+      path.join(process.cwd(), 'backend', 'db.json'),
+      path.join(__dirname, 'backend', 'db.json'),
+      path.resolve('backend/db.json')
+    ];
+    let copied = false;
+    for (const p of altPaths) {
+      try { if (fs.existsSync(p)) { fs.copyFileSync(p, TMP_DB_PATH); copied = true; break; } } catch (_) {}
+    }
+    if (!copied) {
+      // Write minimal db so function doesn't crash
+      fs.writeFileSync(TMP_DB_PATH, JSON.stringify({
+        users: [{ id: "u01", name: "Demo User", email: "user@demo.com", password: "pass123", role: "customer", phone: "+91-9876543210" }],
+        drivers: [{ id: "d01", name: "Demo Driver", password: "pass123", role: "driver", phone: "+91-9876543211", approved: true, status: "offline" }],
+        admins: [{ id: "admin", name: "admin", password: "admin123", role: "admin" }],
+        bookings: [], trucks: [], fleet: [], payments: []
+      }, null, 2));
+    }
+  }
 }
 
 const DB_PATH = TMP_DB_PATH;
@@ -44,6 +67,17 @@ function writeDB(data) {
   try { fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf-8'); }
   finally { dbLock = false; }
 }
+
+// Haversine distance in km
+function getDistanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng/2) * Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const pendingAssignments = {};
 
 // ── OTP store (in-memory, expires after 5 min) ──
 const otpStore = {}; // { phone: { otp, expiresAt } }
@@ -91,7 +125,8 @@ app.post('/api/otp/send', otpLimiter, async (req, res) => {
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
   otpStore[cleanPhone] = { otp, expiresAt };
-  console.log(`OTP for ${cleanPhone}: ${otp}`);
+  // OTP logged only in development
+  if (process.env.NODE_ENV !== 'production') console.log(`OTP for ${cleanPhone}: ${otp}`);
 
   return res.json({ success: true, otp });
 });
@@ -266,11 +301,13 @@ app.post('/api/bookings', (req, res) => {
     truckType: req.body.truckType || 'small',
     pickup: req.body.pickup || {}, dropoff: req.body.dropoff || {},
     cargo: req.body.cargo || {}, priority: req.body.priority || 'standard',
-    status: 'confirmed',
+    status: 'pending',
     fare: req.body.fare || { base: 0, distance: 0, surcharge: 0, total: 0 },
-    payment: req.body.payment || { method: 'pending', status: 'pending', transactionId: null },
+    payment: req.body.payment || { method: req.body.paymentMethod || 'cash', status: 'pending', transactionId: null },
+    paymentMethod: req.body.paymentMethod || 'cash',
     eta: req.body.eta || null, scheduledTime: req.body.scheduledTime || null,
-    createdAt: new Date().toISOString(), completedAt: null
+    createdAt: new Date().toISOString(), completedAt: null,
+    declinedDrivers: [], pendingDriverId: null, assignmentSentAt: null
   };
   db.bookings.push(booking);
   const uIdx = db.users.findIndex(u => u.id === booking.userId);
@@ -290,6 +327,39 @@ app.patch('/api/bookings/:id', (req, res) => {
 });
 
 // Tracking endpoint — converted from SSE to regular JSON for serverless compatibility
+app.post('/api/bookings/:id/auto-assign', (req, res) => {
+  const db = readDB();
+  const booking = db.bookings.find(b => b.id === req.params.id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+  if (booking.driverId) return res.json({ alreadyAssigned: true, driverId: booking.driverId });
+
+  const declinedDrivers = booking.declinedDrivers || [];
+  const pickup = booking.pickup;
+  if (!pickup?.lat || !pickup?.lng) return res.status(400).json({ error: 'Booking has no pickup location' });
+
+  const eligible = db.drivers
+    .filter(d => d.status === 'active' && d.available === true && d.approved !== false && !d.currentJobId && d.location?.lat && d.location?.lng && !declinedDrivers.includes(d.id))
+    .map(d => ({ ...d, distance: getDistanceKm(pickup.lat, pickup.lng, d.location.lat, d.location.lng) }))
+    .sort((a, b) => a.distance - b.distance);
+
+  if (eligible.length === 0) return res.status(404).json({ error: 'No available drivers nearby', noDrivers: true });
+
+  let selected = eligible[0];
+  const closeDrivers = eligible.filter(d => Math.abs(d.distance - selected.distance) <= 2);
+  if (closeDrivers.length > 1) {
+    selected = closeDrivers.sort((a, b) => (b.rating || 0) - (a.rating || 0))[0];
+  }
+
+  pendingAssignments[req.params.id] = { driverId: selected.id, sentAt: Date.now(), bookingId: req.params.id };
+  const bIdx = db.bookings.findIndex(b => b.id === req.params.id);
+  db.bookings[bIdx].pendingDriverId = selected.id;
+  db.bookings[bIdx].assignmentSentAt = Date.now();
+  writeDB(db);
+
+  const { password, ...safeDriver } = selected;
+  return res.json({ assigned: true, driver: safeDriver, distance: selected.distance.toFixed(1) });
+});
+
 app.get('/api/bookings/:id/track', (req, res) => {
   const db = readDB();
   const booking = db.bookings.find(b => b.id === req.params.id);
@@ -470,6 +540,7 @@ app.post('/api/drivers/:id/accept-job', (req, res) => {
   db.bookings[bIdx].status = 'in-transit';
   db.drivers[idx].currentJobId = bookingId;
   db.drivers[idx].status = 'on-trip';
+  db.drivers[idx].available = false;
   writeDB(db);
   return res.json({ success: true, booking: db.bookings[bIdx] });
 });
@@ -478,6 +549,34 @@ app.post('/api/drivers/:id/reject-job', (req, res) => {
   const db = readDB();
   const { bookingId } = req.body;
   return res.json({ success: true, message: `Job ${bookingId} rejected` });
+});
+
+app.post('/api/drivers/:id/respond-assignment', (req, res) => {
+  const db = readDB();
+  const { bookingId, accept } = req.body;
+  const dIdx = db.drivers.findIndex(d => d.id === req.params.id);
+  if (dIdx === -1) return res.status(404).json({ error: 'Driver not found' });
+  const bIdx = db.bookings.findIndex(b => b.id === bookingId);
+  if (bIdx === -1) return res.status(404).json({ error: 'Booking not found' });
+
+  delete pendingAssignments[bookingId];
+  db.bookings[bIdx].pendingDriverId = null;
+  db.bookings[bIdx].assignmentSentAt = null;
+
+  if (accept) {
+    db.bookings[bIdx].driverId = req.params.id;
+    db.bookings[bIdx].status = 'confirmed';
+    db.drivers[dIdx].currentJobId = bookingId;
+    db.drivers[dIdx].available = false;
+    db.drivers[dIdx].status = 'on-trip';
+    writeDB(db);
+    return res.json({ success: true, accepted: true, booking: db.bookings[bIdx] });
+  } else {
+    if (!db.bookings[bIdx].declinedDrivers) db.bookings[bIdx].declinedDrivers = [];
+    db.bookings[bIdx].declinedDrivers.push(req.params.id);
+    writeDB(db);
+    return res.json({ success: true, accepted: false, message: 'Declined, looking for another driver' });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════

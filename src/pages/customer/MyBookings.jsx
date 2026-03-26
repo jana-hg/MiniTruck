@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { bookings as bookingsApi, ratings as ratingsApi } from '../../services/api';
+import { bookings as bookingsApi, ratings as ratingsApi, drivers as driversApi } from '../../services/api';
 import Icon from '../../components/ui/Icon';
 import StatusBadge from '../../components/ui/StatusBadge';
+import MapView, { createTruckIcon } from '../../components/map/MapView';
 
 const FILTERS = ['all', 'active', 'completed', 'cancelled'];
+// active = pending + confirmed + in-transit
 
 export default function MyBookings() {
   const { user } = useAuth();
@@ -17,6 +19,10 @@ export default function MyBookings() {
   const [ratingValue, setRatingValue] = useState(0);
   const [ratingComment, setRatingComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [cancellingId, setCancellingId] = useState(null);
+  const [trackingId, setTrackingId] = useState(null);
+  const [driverLoc, setDriverLoc] = useState(null);
+  const [driverDetails, setDriverDetails] = useState({}); // { [driverId]: driverObj }
 
   const C = {
     bg: isDark ? '#09090B' : '#F1F5F9', card: isDark ? '#18181B' : '#FFFFFF',
@@ -27,15 +33,34 @@ export default function MyBookings() {
   };
 
   useEffect(() => {
-    bookingsApi.getBookings({ userId: user?.id }).then(d => Array.isArray(d) && setBookings(d)).catch(() => {
+    const fetch = () => bookingsApi.getBookings({ userId: user?.id }).then(d => Array.isArray(d) && setBookings(d)).catch(() => {
       bookingsApi.getBookings({}).then(d => Array.isArray(d) && setBookings(d)).catch(() => {});
     });
+    fetch();
+    const interval = setInterval(fetch, 6000);
+    return () => clearInterval(interval);
   }, [user]);
+
+  // Re-trigger auto-assign for pending bookings with no driver and no pending assignment
+  useEffect(() => {
+    bookings.filter(b => b.status === 'pending' && !b.driverId && !b.pendingDriverId)
+      .forEach(b => bookingsApi.autoAssign(b.id).catch(() => {}));
+  }, [bookings]);
+
+  // Fetch driver details for confirmed/in-transit bookings
+  useEffect(() => {
+    const driverIds = [...new Set(bookings.filter(b => b.driverId && (b.status === 'confirmed' || b.status === 'in-transit')).map(b => b.driverId))];
+    driverIds.forEach(id => {
+      if (!driverDetails[id]) {
+        driversApi.getDriver(id).then(d => setDriverDetails(prev => ({ ...prev, [id]: d }))).catch(() => {});
+      }
+    });
+  }, [bookings]);
 
 
   const filtered = bookings.filter(b => {
     if (filter === 'all') return true;
-    if (filter === 'active') return b.status === 'confirmed' || b.status === 'in-transit';
+    if (filter === 'active') return b.status === 'pending' || b.status === 'confirmed' || b.status === 'in-transit';
     if (filter === 'completed') return b.status === 'completed';
     if (filter === 'cancelled') return b.status === 'cancelled';
     return true;
@@ -49,9 +74,30 @@ export default function MyBookings() {
       .finally(() => setSubmitting(false));
   };
 
+  const handleCancel = (id) => {
+    if (!window.confirm('Are you sure you want to cancel this booking?')) return;
+    setCancellingId(id);
+    bookingsApi.updateBooking(id, { status: 'cancelled' })
+      .then(() => setBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b)))
+      .finally(() => setCancellingId(null));
+  };
+
+  useEffect(() => {
+    if (!trackingId) { setDriverLoc(null); return; }
+    const b = bookings.find(x => x.id === trackingId);
+    if (!b?.driverId) return;
+    const fetchLoc = () => driversApi.getDriver(b.driverId).then(d => {
+      if (d?.location) setDriverLoc(d.location);
+    }).catch(() => {});
+    fetchLoc();
+    const interval = setInterval(fetchLoc, 5000);
+    return () => clearInterval(interval);
+  }, [trackingId, bookings]);
+
   const box = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, boxShadow: C.shadow };
 
   const statusAccent = (status) => {
+    if (status === 'pending') return isDark ? '#FBBF24' : '#D97706';
     if (status === 'confirmed') return isDark ? '#34D399' : '#059669';
     if (status === 'in-transit') return isDark ? '#60A5FA' : '#2563EB';
     if (status === 'completed') return isDark ? '#FFD700' : '#F59E0B';
@@ -60,6 +106,7 @@ export default function MyBookings() {
   };
 
   const statusGlow = (status) => {
+    if (status === 'pending') return isDark ? 'rgba(251,191,36,0.10)' : 'rgba(217,119,6,0.06)';
     if (status === 'confirmed') return isDark ? 'rgba(52,211,153,0.12)' : 'rgba(5,150,105,0.06)';
     if (status === 'in-transit') return isDark ? 'rgba(96,165,250,0.12)' : 'rgba(37,99,235,0.06)';
     if (status === 'completed') return isDark ? 'rgba(255,215,0,0.10)' : 'rgba(245,158,11,0.06)';
@@ -68,6 +115,7 @@ export default function MyBookings() {
   };
 
   const statusIcon = (status) => {
+    if (status === 'pending') return 'hourglass_top';
     if (status === 'confirmed') return 'check_circle';
     if (status === 'in-transit') return 'local_shipping';
     if (status === 'completed') return 'verified';
@@ -88,7 +136,7 @@ export default function MyBookings() {
       <div style={{ display: 'flex', gap: 4, background: isDark ? '#18181B' : '#E2E8F0', borderRadius: 10, padding: 4 }}>
         {FILTERS.map(f => (
           <button key={f} onClick={() => setFilter(f)} style={{ flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', textTransform: 'uppercase', background: filter === f ? C.accent : 'transparent', color: filter === f ? (isDark ? '#000' : '#fff') : C.sub }}>
-            {f} ({f === 'all' ? bookings.length : bookings.filter(b => f === 'active' ? (b.status === 'confirmed' || b.status === 'in-transit') : b.status === f).length})
+            {f} ({f === 'all' ? bookings.length : bookings.filter(b => f === 'active' ? (b.status === 'pending' || b.status === 'confirmed' || b.status === 'in-transit') : b.status === f).length})
           </button>
         ))}
       </div>
@@ -165,17 +213,82 @@ export default function MyBookings() {
                 </div>
               </div>
 
+              {/* Payment method */}
+              {b.paymentMethod && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                  <Icon name={b.paymentMethod === 'cash' ? 'money' : b.paymentMethod === 'upi' ? 'qr_code_2' : 'account_balance_wallet'} size={14} style={{ color: C.muted }} />
+                  <span style={{ fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase' }}>{b.paymentMethod}</span>
+                </div>
+              )}
+
+              {/* Pending status - waiting for driver */}
+              {b.status === 'pending' && (
+                <div style={{ padding: '10px 12px', borderRadius: 10, background: isDark ? 'rgba(251,191,36,0.08)' : '#FFFBEB', border: `1px solid ${isDark ? 'rgba(251,191,36,0.2)' : '#FDE68A'}`, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="hourglass_top" size={16} style={{ color: isDark ? '#FBBF24' : '#D97706' }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? '#FBBF24' : '#D97706' }}>
+                    {b.pendingDriverId ? 'Waiting for driver to accept...' : 'Finding a driver for you...'}
+                  </span>
+                </div>
+              )}
+
+              {/* Driver details - shown after confirmed */}
+              {b.driverId && (b.status === 'confirmed' || b.status === 'in-transit') && driverDetails[b.driverId] && (() => {
+                const drv = driverDetails[b.driverId];
+                return (
+                  <div style={{ padding: '12px', borderRadius: 12, background: isDark ? 'rgba(16,185,129,0.06)' : '#ECFDF5', border: `1px solid ${isDark ? 'rgba(16,185,129,0.15)' : '#A7F3D0'}`, marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 18, background: isDark ? 'rgba(16,185,129,0.15)' : '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                          {drv.profilePicture ? <img src={drv.profilePicture} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="person" size={18} style={{ color: '#10B981' }} />}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{drv.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            {drv.rating > 0 && <span style={{ fontSize: 11, color: isDark ? '#FFD700' : '#F59E0B', fontWeight: 600 }}>★ {drv.rating}</span>}
+                            {drv.vehicleDetails?.model && <span style={{ fontSize: 10, color: C.muted }}>{drv.vehicleDetails.model}</span>}
+                            {drv.vehicleDetails?.plateNumber && <span style={{ fontSize: 10, color: C.muted }}>· {drv.vehicleDetails.plateNumber}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      {drv.phone && (
+                        <a href={`tel:${drv.phone}`} style={{
+                          width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: '#10B981', color: '#fff', textDecoration: 'none',
+                        }}>
+                          <Icon name="call" size={18} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Actions */}
-              <div style={{ display: 'flex', gap: 8, paddingTop: 10 }}>
-                {(b.status === 'confirmed' || b.status === 'in-transit') && (
-                  <Link to={`/tracking/${b.id}`} style={{
-                    textDecoration: 'none', flex: 1, padding: '10px 0', textAlign: 'center', borderRadius: 10,
-                    background: `linear-gradient(135deg, ${accent}18, ${accent}08)`,
-                    border: `1px solid ${accent}25`,
-                    color: accent, fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
+              <div style={{ display: 'flex', gap: 8, paddingTop: 10, flexWrap: 'wrap' }}>
+                {/* Pending: only cancel */}
+                {b.status === 'pending' && (
+                  <button onClick={() => handleCancel(b.id)} disabled={cancellingId === b.id} style={{
+                    flex: 1, padding: '10px 0', borderRadius: 10, cursor: 'pointer',
+                    background: isDark ? 'rgba(248,113,113,0.1)' : 'rgba(220,38,38,0.05)',
+                    border: `1px solid ${isDark ? 'rgba(248,113,113,0.3)' : 'rgba(220,38,38,0.2)'}`,
+                    color: isDark ? '#F87171' : '#DC2626', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
+                    opacity: cancellingId === b.id ? 0.5 : 1,
                   }}>
-                    <Icon name="location_on" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Track Live
-                  </Link>
+                    <Icon name="cancel" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                    {cancellingId === b.id ? 'Cancelling...' : 'Cancel Booking'}
+                  </button>
+                )}
+                {/* Confirmed/In-transit: track + call (no cancel) */}
+                {(b.status === 'confirmed' || b.status === 'in-transit') && (
+                  <button onClick={() => setTrackingId(trackingId === b.id ? null : b.id)} style={{
+                    flex: 1, padding: '10px 0', textAlign: 'center', borderRadius: 10, cursor: 'pointer',
+                    background: trackingId === b.id ? accent : `linear-gradient(135deg, ${accent}18, ${accent}08)`,
+                    border: `1px solid ${accent}25`,
+                    color: trackingId === b.id ? '#fff' : accent, fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
+                  }}>
+                    <Icon name="location_on" size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                    {trackingId === b.id ? 'Hide Location' : 'Track Location'}
+                  </button>
                 )}
                 {b.status === 'completed' && (
                   <>
@@ -208,6 +321,29 @@ export default function MyBookings() {
                   </Link>
                 )}
               </div>
+
+              {/* Live Driver Location Map */}
+              {trackingId === b.id && (b.status === 'confirmed' || b.status === 'in-transit') && (
+                <div style={{ marginTop: 12, borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+                  <div style={{ height: 200 }}>
+                    <MapView
+                      center={driverLoc ? [driverLoc.lat, driverLoc.lng] : [b.pickup?.lat || 19.076, b.pickup?.lng || 72.877]}
+                      zoom={14}
+                      markers={[
+                        ...(b.pickup ? [{ position: [b.pickup.lat, b.pickup.lng], popup: 'Pickup', icon: 'pickup' }] : []),
+                        ...(b.dropoff ? [{ position: [b.dropoff.lat, b.dropoff.lng], popup: 'Dropoff', icon: 'dropoff' }] : []),
+                        ...(driverLoc ? [{ position: [driverLoc.lat, driverLoc.lng], popup: 'Driver', iconHtml: createTruckIcon() }] : []),
+                      ]}
+                    />
+                  </div>
+                  <div style={{ padding: '8px 12px', background: driverLoc ? (isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5') : (isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC'), display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name={driverLoc ? 'local_shipping' : 'hourglass_top'} size={14} style={{ color: driverLoc ? '#10B981' : C.muted }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: driverLoc ? '#10B981' : C.muted }}>
+                      {driverLoc ? 'Driver is on the way' : 'Waiting for driver location...'}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           );

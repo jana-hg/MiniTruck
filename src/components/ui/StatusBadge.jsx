@@ -5,7 +5,7 @@ const STYLES = {
   'delayed': { light: { bg: '#FEF2F2', text: '#DC2626', dot: '#EF4444' }, dark: { bg: 'rgba(239,68,68,0.12)', text: '#F87171', dot: '#EF4444' } },
   'completed': { light: { bg: '#ECFDF5', text: '#059669', dot: '#10B981' }, dark: { bg: 'rgba(16,185,129,0.12)', text: '#34D399', dot: '#10B981' } },
   'confirmed': { light: { bg: '#FFFBEB', text: '#D97706', dot: '#F59E0B' }, dark: { bg: 'rgba(245,158,11,0.12)', text: '#FBBF24', dot: '#F59E0B' } },
-  'pending': { light: { bg: '#F4F4F5', text: '#71717A', dot: '#A1A1AA' }, dark: { bg: 'rgba(161,161,170,0.1)', text: '#A1A1AA', dot: '#71717A' } },
+  'pending': { light: { bg: '#FFFBEB', text: '#B45309', dot: '#F59E0B' }, dark: { bg: 'rgba(251,191,36,0.1)', text: '#FBBF24', dot: '#F59E0B' } },
   'cancelled': { light: { bg: '#FEF2F2', text: '#DC2626', dot: '#EF4444' }, dark: { bg: 'rgba(239,68,68,0.1)', text: '#F87171', dot: '#EF4444' } },
   'online': { light: { bg: '#ECFDF5', text: '#059669', dot: '#10B981' }, dark: { bg: 'rgba(16,185,129,0.12)', text: '#34D399', dot: '#10B981' } },
   'offline': { light: { bg: '#F4F4F5', text: '#71717A', dot: '#A1A1AA' }, dark: { bg: 'rgba(161,161,170,0.1)', text: '#A1A1AA', dot: '#71717A' } },

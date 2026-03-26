@@ -118,15 +118,17 @@ export default function AdminDashboard() {
 
         {/* Right: Fleet Map + Theme + Profile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Fleet Map */}
-          <Link to="/fleet" style={{
-            textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
-            background: isDark ? 'rgba(59,130,246,0.1)' : '#F0F9FF', color: isDark ? '#60A5FA' : '#3B82F6',
-            border: `1px solid ${isDark ? 'rgba(59,130,246,0.2)' : '#BFDBFE'}`, fontSize: 12, fontWeight: 700,
+          {/* Fleet Map Toggle */}
+          <button onClick={() => setShowMap(!showMap)} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: mob ? '6px 8px' : '6px 12px', borderRadius: 8,
+            background: showMap ? (isDark ? 'rgba(16,185,129,0.15)' : '#ECFDF5') : (isDark ? 'rgba(59,130,246,0.1)' : '#F0F9FF'),
+            color: showMap ? '#10B981' : (isDark ? '#60A5FA' : '#3B82F6'),
+            border: `1px solid ${showMap ? (isDark ? 'rgba(16,185,129,0.3)' : '#A7F3D0') : (isDark ? 'rgba(59,130,246,0.2)' : '#BFDBFE')}`,
+            fontSize: 12, fontWeight: 700, cursor: 'pointer',
           }}>
-            <Icon name="map" size={16} />
-            {!mob && <span>Fleet Map</span>}
-          </Link>
+            <Icon name={showMap ? 'map' : 'map'} size={16} filled={showMap} />
+            {!mob && <span>{showMap ? 'Hide Map' : 'Fleet Map'}</span>}
+          </button>
 
           {/* Theme toggle */}
           <button onClick={toggleTheme}
@@ -494,43 +496,61 @@ function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetDat
         {bookings.length === 0 && <div style={{ padding: '48px 0', textAlign: 'center', fontSize: 13, color: C.muted }}>No rides</div>}
       </Box>
 
-      {/* Live Fleet Map - Toggle */}
-      <Box C={C}>
-        <div onClick={() => setShowMap(!showMap)} style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(52,211,153,0.1)' : '#ECFDF5' }}>
-              <Icon name="map" filled size={16} style={{ color: isDark ? '#34D399' : '#10B981' }} />
-            </div>
-            <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
-              {selectedDriver ? `${selectedDriver.name}'s Routes` : 'Live Fleet Map'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {selectedDriver && (
-              <button onClick={e => { e.stopPropagation(); setSelectedDriver(null); }}
-                style={{ fontSize: 10, fontWeight: 600, color: C.accent, background: C.accentBg, border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6 }}>
-                Show All
-              </button>
-            )}
-            <Icon name={showMap ? 'expand_less' : 'expand_more'} size={20} style={{ color: C.muted }} />
-          </div>
-        </div>
-        <AnimatePresence>
-          {showMap && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
-              {selectedDriver && (
-                <div style={{ padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, background: isDark ? 'rgba(255,215,0,0.05)' : '#F0F9FF' }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.accent }}>
-                    <Icon name="person" filled size={14} style={{ color: isDark ? '#000' : '#fff' }} />
+      {/* Live Fleet Map */}
+      <AnimatePresence>
+        {showMap && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
+            <Box C={C} style={{ overflow: 'hidden', padding: 0 }}>
+              {/* Map Header */}
+              <div style={{ padding: mob ? '12px 14px' : '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5' }}>
+                    <Icon name="satellite_alt" filled size={16} style={{ color: '#10B981' }} />
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{selectedDriver.name}</span>
-                  <span style={{ fontSize: 10, color: C.muted }}>{driverBookings.length} route(s)</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
+                      {selectedDriver ? selectedDriver.name : 'Live Fleet Map'}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
+                      {selectedDriver ? `${driverBookings.length} active route(s)` : `${fleetData.filter(f => f.status === 'active' || f.status === 'on-trip').length} active · ${fleetData.length} total`}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {selectedDriver && (
+                    <button onClick={() => setSelectedDriver(null)}
+                      style={{ fontSize: 10, fontWeight: 700, color: '#10B981', background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', border: `1px solid ${isDark ? 'rgba(16,185,129,0.2)' : '#A7F3D0'}`, cursor: 'pointer', padding: '5px 10px', borderRadius: 6 }}>
+                      All Drivers
+                    </button>
+                  )}
+                  <button onClick={() => setShowMap(false)}
+                    style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1px solid ${C.border}`, background: 'transparent', color: C.muted }}>
+                    <Icon name="close" size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Selected driver info bar */}
+              {selectedDriver && (
+                <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8, background: isDark ? 'rgba(255,215,0,0.04)' : '#FFFBEB', borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ width: 24, height: 24, borderRadius: 12, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="person" filled size={12} style={{ color: isDark ? '#000' : '#fff' }} />
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.text }}>{selectedDriver.name}</span>
+                  <span style={{ fontSize: 10, color: C.muted }}>·</span>
+                  <span style={{ fontSize: 10, color: C.muted }}>{selectedDriver.status}</span>
+                  {selectedDriver.rating > 0 && <>
+                    <span style={{ fontSize: 10, color: C.muted }}>·</span>
+                    <span style={{ fontSize: 10, color: isDark ? '#FFD700' : '#F59E0B' }}>★ {selectedDriver.rating}</span>
+                  </>}
                 </div>
               )}
-              <div style={{ height: mob ? 250 : 350, borderTop: `1px solid ${C.border}` }}>
+
+              {/* Map */}
+              <div style={{ height: mob ? 280 : 400, position: 'relative' }}>
                 <MapView
                   center={selectedDriver?.location ? [selectedDriver.location.lat, selectedDriver.location.lng] : [19.065, 72.878]}
-                  zoom={selectedDriver ? 5 : 12}
+                  zoom={selectedDriver ? 14 : 12}
                   markers={selectedDriver
                     ? [...(selectedDriver.location ? [{ lat: selectedDriver.location.lat, lng: selectedDriver.location.lng, icon: createFleetActiveIcon() }] : [])]
                     : fleetData.map(f => ({ lat: f.location?.lat || 19.07, lng: f.location?.lng || 72.87, icon: (f.status === 'active' || f.status === 'on-trip') ? createFleetActiveIcon() : createFleetIdleIcon() }))
@@ -539,13 +559,20 @@ function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetDat
                   destination={driverBookings[0]?.dropoff?.lat ? [driverBookings[0].dropoff.lat, driverBookings[0].dropoff.lng] : null}
                   showLocate={false} className="w-full h-full"
                 />
+                {/* Legend overlay */}
+                <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 500, background: isDark ? 'rgba(24,24,27,0.9)' : 'rgba(255,255,255,0.95)', borderRadius: 8, padding: '6px 10px', display: 'flex', gap: 12, fontSize: 10, fontWeight: 600, border: `1px solid ${C.border}`, backdropFilter: 'blur(8px)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#10B981' }} /> Active</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#94A3B8' }} /> Idle</span>
+                </div>
               </div>
+
+              {/* Driver routes list */}
               {selectedDriver && driverBookings.length > 0 && (
-                <div style={{ borderTop: `1px solid ${C.border}`, maxHeight: 120, overflowY: 'auto' }}>
+                <div style={{ borderTop: `1px solid ${C.border}`, maxHeight: 100, overflowY: 'auto' }}>
                   {driverBookings.map(b => (
-                    <div key={b.id} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}`, fontSize: 11 }}>
+                    <div key={b.id} style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}`, fontSize: 11 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-                        <Icon name="route" size={14} style={{ color: C.accent, flexShrink: 0 }} />
+                        <Icon name="route" size={14} style={{ color: '#10B981', flexShrink: 0 }} />
                         <span style={{ fontWeight: 600, color: C.text }}>{b.id}</span>
                         {!mob && <span style={{ color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.pickup?.address} → {b.dropoff?.address}</span>}
                       </div>
@@ -554,10 +581,10 @@ function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetDat
                   ))}
                 </div>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </Box>
+            </Box>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Payments + Drivers */}
       <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : '1fr 1fr', gap: 16 }}>

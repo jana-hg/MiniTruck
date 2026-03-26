@@ -18,6 +18,7 @@ export default function DriverHome() {
   const [expandedJob, setExpandedJob] = useState(null);
   const [routeCache, setRouteCache] = useState({}); // { [jobId]: { coords, distanceKm, durationMin } }
   const [driverLoc, setDriverLoc] = useState(null);
+  const [assignedTrip, setAssignedTrip] = useState(null);
 
   const C = {
     bg: isDark ? '#09090B' : '#F1F5F9',
@@ -35,9 +36,51 @@ export default function DriverHome() {
   useEffect(() => {
     if (!user?.id) return;
     driversApi.getDriver(user.id).then(d => { setDriver(d); setAvailable(d.available); }).catch(() => {});
-    bookingsApi.getBookings({ status: 'confirmed' }).then(d => Array.isArray(d) && setPendingJobs(d.filter(b => !b.driverId || b.driverId === user.id))).catch(() => {});
-    bookingsApi.getBookings({}).then(d => { if (Array.isArray(d)) { const a = d.find(b => b.driverId === user.id && b.status === 'in-transit'); if (a) setActiveJob(a); }}).catch(() => {});
+    bookingsApi.getBookings({}).then(d => {
+      if (!Array.isArray(d)) return;
+      setPendingJobs(d.filter(b => (b.status === 'pending' || b.status === 'confirmed') && (!b.driverId || b.driverId === user.id)));
+      const a = d.find(b => b.driverId === user.id && (b.status === 'confirmed' || b.status === 'in-transit'));
+      if (a) setActiveJob(a);
+    }).catch(() => {});
   }, [user]);
+
+  // Poll for assigned trips (auto-assignment system)
+  useEffect(() => {
+    if (!user?.id || !available) return;
+    const check = () => {
+      bookingsApi.getBookings({}).then(all => {
+        if (!Array.isArray(all)) return;
+        const assigned = all.find(b => b.pendingDriverId === user.id && b.status === 'pending' && !b.driverId);
+        if (assigned && (!assignedTrip || assignedTrip.id !== assigned.id)) {
+          setAssignedTrip(assigned);
+        } else if (!assigned && assignedTrip) {
+          setAssignedTrip(null);
+        }
+      }).catch(() => {});
+    };
+    check();
+    const interval = setInterval(check, 4000);
+    return () => clearInterval(interval);
+  }, [user, available, assignedTrip]);
+
+  const handleAcceptAssignment = () => {
+    if (!assignedTrip) return;
+    driversApi.respondAssignment(user.id, assignedTrip.id, true).then(res => {
+      if (res.accepted) {
+        setActiveJob(res.booking);
+        setAssignedTrip(null);
+        setAvailable(false);
+        setPendingJobs(prev => prev.filter(j => j.id !== assignedTrip.id));
+      }
+    }).catch(() => {});
+  };
+
+  const handleDeclineAssignment = () => {
+    if (!assignedTrip) return;
+    driversApi.respondAssignment(user.id, assignedTrip.id, false).then(() => {
+      setAssignedTrip(null);
+    }).catch(() => {});
+  };
 
   const [locPopup, setLocPopup] = useState(false);
 
@@ -96,7 +139,12 @@ export default function DriverHome() {
   const completeJob = () => {
     if (!activeJob) return;
     fetch(`/api/bookings/${activeJob.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) })
-      .then(() => setActiveJob(null)).catch(() => {});
+      .then(() => {
+        setActiveJob(null);
+        // Set driver back to available after completing trip
+        driversApi.toggleAvailability(user.id, { available: true })
+          .then(d => { setAvailable(d.available); setDriver(d); }).catch(() => {});
+      }).catch(() => {});
   };
 
   // Fetch route when a job is expanded or active
@@ -472,6 +520,84 @@ export default function DriverHome() {
             style={{ padding: '12px 32px', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: C.green, color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <Icon name="power_settings_new" size={18} /> Go Online
           </button>
+        </div>
+      )}
+
+      {/* ── Assignment Notification Popup ── */}
+      {assignedTrip && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', padding: 16 }}>
+          <div style={{
+            width: '100%', maxWidth: 420, background: C.card, borderRadius: 20, overflow: 'hidden',
+            boxShadow: '0 -4px 30px rgba(0,0,0,0.3)', border: `1px solid ${C.border}`,
+          }}>
+            {/* Header */}
+            <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #10B981, #059669)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="notifications_active" size={24} style={{ color: '#fff' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>New Trip Request!</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>You've been selected as the nearest driver</div>
+              </div>
+            </div>
+
+            {/* Trip Details */}
+            <div style={{ padding: '16px 20px' }}>
+              <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                <span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>ESTIMATED FARE</span>
+                <div style={{ fontSize: 28, fontWeight: 900, color: '#10B981', marginTop: 2 }}>₹{assignedTrip.fare?.total?.toFixed(0) || '0'}</div>
+              </div>
+
+              <div style={{ background: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC', borderRadius: 12, padding: 14, marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 2 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 10, background: '#10B981' }} />
+                    <div style={{ width: 2, height: 24, background: 'linear-gradient(to bottom, #10B981, #3B82F6)' }} />
+                    <div style={{ width: 10, height: 10, borderRadius: 10, background: '#3B82F6' }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{assignedTrip.pickup?.address || 'Pickup'}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 16 }}>{assignedTrip.dropoff?.address || 'Dropoff'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                <div style={{ padding: '6px 12px', borderRadius: 8, background: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', fontSize: 11, fontWeight: 600, color: C.sub }}>
+                  <Icon name="inventory_2" size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />{assignedTrip.cargo?.loadType || assignedTrip.cargo?.type || 'General'}
+                </div>
+                <div style={{ padding: '6px 12px', borderRadius: 8, background: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', fontSize: 11, fontWeight: 600, color: C.sub }}>
+                  <Icon name="local_shipping" size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />{assignedTrip.truckType || 'small'}
+                </div>
+                {assignedTrip.paymentMethod && (
+                  <div style={{ padding: '6px 12px', borderRadius: 8, background: isDark ? 'rgba(255,255,255,0.05)' : '#F1F5F9', fontSize: 11, fontWeight: 600, color: C.sub }}>
+                    <Icon name="payments" size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />{assignedTrip.paymentMethod.toUpperCase()}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={handleDeclineAssignment} style={{
+                  flex: 1, padding: '14px 0', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 700,
+                  background: isDark ? 'rgba(248,113,113,0.1)' : 'rgba(220,38,38,0.06)',
+                  border: `1.5px solid ${isDark ? 'rgba(248,113,113,0.4)' : 'rgba(220,38,38,0.25)'}`,
+                  color: isDark ? '#F87171' : '#DC2626',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}>
+                  <Icon name="close" size={18} /> Decline
+                </button>
+                <button onClick={handleAcceptAssignment} style={{
+                  flex: 2, padding: '14px 0', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 800,
+                  background: 'linear-gradient(135deg, #10B981, #059669)',
+                  border: 'none', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  boxShadow: '0 4px 16px rgba(16,185,129,0.3)',
+                }}>
+                  <Icon name="check_circle" size={18} /> Accept Trip
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

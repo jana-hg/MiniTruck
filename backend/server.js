@@ -38,6 +38,17 @@ function writeDB(data) {
   finally { dbLock = false; }
 }
 
+// Haversine distance in km
+function getDistanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng/2) * Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const pendingAssignments = {};
+
 // ── OTP store (in-memory, expires after 5 min) ──
 const otpStore = {}; // { phone: { otp, expiresAt } }
 
@@ -84,7 +95,8 @@ app.post('/api/otp/send', otpLimiter, async (req, res) => {
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
   otpStore[cleanPhone] = { otp, expiresAt };
-  console.log(`\n📱 OTP for ${cleanPhone}: ${otp}\n`);
+  // OTP logged only in development
+  if (process.env.NODE_ENV !== 'production') console.log(`\n📱 OTP for ${cleanPhone}: ${otp}\n`);
 
   // OTP is logged in server console — return it in response for the app to show
   return res.json({ success: true, otp });
@@ -263,11 +275,13 @@ app.post('/api/bookings', (req, res) => {
     truckType: req.body.truckType || 'small',
     pickup: req.body.pickup || {}, dropoff: req.body.dropoff || {},
     cargo: req.body.cargo || {}, priority: req.body.priority || 'standard',
-    status: 'confirmed',
+    status: 'pending',
     fare: req.body.fare || { base: 0, distance: 0, surcharge: 0, total: 0 },
-    payment: req.body.payment || { method: 'pending', status: 'pending', transactionId: null },
+    payment: req.body.payment || { method: req.body.paymentMethod || 'cash', status: 'pending', transactionId: null },
+    paymentMethod: req.body.paymentMethod || 'cash',
     eta: req.body.eta || null, scheduledTime: req.body.scheduledTime || null,
-    createdAt: new Date().toISOString(), completedAt: null
+    createdAt: new Date().toISOString(), completedAt: null,
+    declinedDrivers: [], pendingDriverId: null, assignmentSentAt: null
   };
   db.bookings.push(booking);
   // Update user booking count
@@ -285,6 +299,39 @@ app.patch('/api/bookings/:id', (req, res) => {
   if (req.body.status === 'completed') db.bookings[idx].completedAt = new Date().toISOString();
   writeDB(db);
   return res.json(db.bookings[idx]);
+});
+
+app.post('/api/bookings/:id/auto-assign', (req, res) => {
+  const db = readDB();
+  const booking = db.bookings.find(b => b.id === req.params.id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+  if (booking.driverId) return res.json({ alreadyAssigned: true, driverId: booking.driverId });
+
+  const declinedDrivers = booking.declinedDrivers || [];
+  const pickup = booking.pickup;
+  if (!pickup?.lat || !pickup?.lng) return res.status(400).json({ error: 'Booking has no pickup location' });
+
+  const eligible = db.drivers
+    .filter(d => d.status === 'active' && d.available === true && d.approved !== false && !d.currentJobId && d.location?.lat && d.location?.lng && !declinedDrivers.includes(d.id))
+    .map(d => ({ ...d, distance: getDistanceKm(pickup.lat, pickup.lng, d.location.lat, d.location.lng) }))
+    .sort((a, b) => a.distance - b.distance);
+
+  if (eligible.length === 0) return res.status(404).json({ error: 'No available drivers nearby', noDrivers: true });
+
+  let selected = eligible[0];
+  const closeDrivers = eligible.filter(d => Math.abs(d.distance - selected.distance) <= 2);
+  if (closeDrivers.length > 1) {
+    selected = closeDrivers.sort((a, b) => (b.rating || 0) - (a.rating || 0))[0];
+  }
+
+  pendingAssignments[req.params.id] = { driverId: selected.id, sentAt: Date.now(), bookingId: req.params.id };
+  const bIdx = db.bookings.findIndex(b => b.id === req.params.id);
+  db.bookings[bIdx].pendingDriverId = selected.id;
+  db.bookings[bIdx].assignmentSentAt = Date.now();
+  writeDB(db);
+
+  const { password, ...safeDriver } = selected;
+  return res.json({ assigned: true, driver: safeDriver, distance: selected.distance.toFixed(1) });
 });
 
 app.get('/api/bookings/:id/track', (req, res) => {
@@ -469,6 +516,7 @@ app.post('/api/drivers/:id/accept-job', (req, res) => {
   db.bookings[bIdx].status = 'in-transit';
   db.drivers[idx].currentJobId = bookingId;
   db.drivers[idx].status = 'on-trip';
+  db.drivers[idx].available = false;
   writeDB(db);
   return res.json({ success: true, booking: db.bookings[bIdx] });
 });
@@ -477,6 +525,34 @@ app.post('/api/drivers/:id/reject-job', (req, res) => {
   const db = readDB();
   const { bookingId } = req.body;
   return res.json({ success: true, message: `Job ${bookingId} rejected` });
+});
+
+app.post('/api/drivers/:id/respond-assignment', (req, res) => {
+  const db = readDB();
+  const { bookingId, accept } = req.body;
+  const dIdx = db.drivers.findIndex(d => d.id === req.params.id);
+  if (dIdx === -1) return res.status(404).json({ error: 'Driver not found' });
+  const bIdx = db.bookings.findIndex(b => b.id === bookingId);
+  if (bIdx === -1) return res.status(404).json({ error: 'Booking not found' });
+
+  delete pendingAssignments[bookingId];
+  db.bookings[bIdx].pendingDriverId = null;
+  db.bookings[bIdx].assignmentSentAt = null;
+
+  if (accept) {
+    db.bookings[bIdx].driverId = req.params.id;
+    db.bookings[bIdx].status = 'confirmed';
+    db.drivers[dIdx].currentJobId = bookingId;
+    db.drivers[dIdx].status = 'on-trip';
+    db.drivers[dIdx].available = false;
+    writeDB(db);
+    return res.json({ success: true, accepted: true, booking: db.bookings[bIdx] });
+  } else {
+    if (!db.bookings[bIdx].declinedDrivers) db.bookings[bIdx].declinedDrivers = [];
+    db.bookings[bIdx].declinedDrivers.push(req.params.id);
+    writeDB(db);
+    return res.json({ success: true, accepted: false, message: 'Declined, looking for another driver' });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════

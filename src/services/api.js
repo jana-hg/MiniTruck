@@ -44,6 +44,7 @@ export const bookings = {
   getBooking: (id) => api.get(`/bookings/${id}`).then(r => r.data),
   createBooking: (data) => api.post('/bookings', data).then(r => r.data),
   updateBooking: (id, data) => api.patch(`/bookings/${id}`, data).then(r => r.data),
+  autoAssign: (id) => api.post(`/bookings/${id}/auto-assign`).then(r => r.data),
 };
 
 // ── Drivers ──
@@ -58,6 +59,7 @@ export const drivers = {
   acceptJob: (id, bookingId) => api.post(`/drivers/${id}/accept-job`, { bookingId }).then(r => r.data),
   rejectJob: (id, bookingId) => api.post(`/drivers/${id}/reject-job`, { bookingId }).then(r => r.data),
   updateLocation: (id, lat, lng) => api.post(`/drivers/${id}/location`, { lat, lng }).then(r => r.data),
+  respondAssignment: (id, bookingId, accept) => api.post(`/drivers/${id}/respond-assignment`, { bookingId, accept }).then(r => r.data),
 };
 
 // ── Trucks ──

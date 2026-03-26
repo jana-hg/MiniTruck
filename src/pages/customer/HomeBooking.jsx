@@ -37,10 +37,10 @@ export default function HomeBooking() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [discountCode, setDiscountCode] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
   const [estimate, setEstimate] = useState(null);
   const [routeData, setRouteData] = useState(null);
   const [booking, setBooking] = useState(false);
-  const [showMap, setShowMap] = useState(false);
   const [mapPicker, setMapPicker] = useState(null); // null | 'pickup' | 'dropoff'
   const [mapPickerCenter, setMapPickerCenter] = useState([19.076, 72.877]);
 
@@ -58,7 +58,7 @@ export default function HomeBooking() {
 
   useEffect(() => { if (dPickup.length > 2 && !pickup) geo.geocode(dPickup).then(setPickupResults).catch(() => {}); else setPickupResults([]); }, [dPickup]);
   useEffect(() => { if (dDropoff.length > 2 && !dropoff) geo.geocode(dDropoff).then(setDropoffResults).catch(() => {}); else setDropoffResults([]); }, [dDropoff]);
-  useEffect(() => { if (pickup && dropoff) { geo.getRoute(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng).then(setRouteData).catch(() => {}); setShowMap(true); } }, [pickup, dropoff]);
+  useEffect(() => { if (pickup && dropoff) { geo.getRoute(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng).then(setRouteData).catch(() => {}); } }, [pickup, dropoff]);
   useEffect(() => { if (pickup && dropoff && routeData) pricingApi.estimate({ truckType, distanceKm: routeData.distanceKm, loadType: handling, weight: weight || 0, priority, discountCode }).then(setEstimate).catch(() => {}); }, [truckType, routeData, handling, weight, priority, discountCode]);
 
   const selectLocation = (r, type) => {
@@ -74,9 +74,13 @@ export default function HomeBooking() {
     bookingsApi.createBooking({
       userId: user?.id, truckType, pickup, dropoff,
       cargo: { type: loadType, description, weight: `${weight || 0} KG`, handling, loadType, size },
-      priority, fare: estimate ? { base: estimate.baseFare, distance: estimate.distanceCharge, surcharge: estimate.weightSurcharge + estimate.handlingSurcharge, total: estimate.total } : { total: 0 },
+      priority, paymentMethod,
+      fare: estimate ? { base: estimate.baseFare, distance: estimate.distanceCharge, surcharge: estimate.weightSurcharge + estimate.handlingSurcharge, total: estimate.total } : { total: 0 },
       scheduledTime: scheduleType === 'schedule' ? `${scheduleDate}T${scheduleTime}` : null,
-    }).then(b => navigate(`/payment?bookingId=${b.id}&amount=${estimate?.total || 0}`))
+    }).then(b => {
+      bookingsApi.autoAssign(b.id).catch(() => {});
+      navigate('/bookings');
+    })
       .catch(() => setBooking(false));
   };
 
@@ -152,7 +156,7 @@ export default function HomeBooking() {
         <div style={{ position: 'relative', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 10, height: 10, borderRadius: 5, background: '#10B981', flexShrink: 0 }} />
-            <input placeholder="Pickup location..." value={pickupQuery} onChange={e => { setPickupQuery(e.target.value); setPickup(null); setShowMap(false); }} style={{ ...inp, flex: 1, paddingLeft: 0, border: 'none', borderBottom: `1px solid ${C.border}`, borderRadius: 0 }} />
+            <input placeholder="Pickup location..." value={pickupQuery} onChange={e => { setPickupQuery(e.target.value); setPickup(null);}} style={{ ...inp, flex: 1, paddingLeft: 0, border: 'none', borderBottom: `1px solid ${C.border}`, borderRadius: 0 }} />
             <button onClick={() => useCurrentLocation('pickup')} title="Use my location"
               style={{ width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1px solid ${C.border}`, background: isDark ? 'rgba(66,133,244,0.1)' : '#EFF6FF', color: '#4285F4', flexShrink: 0 }}>
               <Icon name="my_location" size={16} />
@@ -168,7 +172,7 @@ export default function HomeBooking() {
         <div style={{ position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 10, height: 10, borderRadius: 5, background: '#3B82F6', flexShrink: 0 }} />
-            <input placeholder="Drop-off location..." value={dropoffQuery} onChange={e => { setDropoffQuery(e.target.value); setDropoff(null); setShowMap(false); }} style={{ ...inp, flex: 1, paddingLeft: 0, border: 'none', borderBottom: `1px solid ${C.border}`, borderRadius: 0 }} />
+            <input placeholder="Drop-off location..." value={dropoffQuery} onChange={e => { setDropoffQuery(e.target.value); setDropoff(null);}} style={{ ...inp, flex: 1, paddingLeft: 0, border: 'none', borderBottom: `1px solid ${C.border}`, borderRadius: 0 }} />
             <button onClick={() => openGoogleMapsPicker('dropoff')} title="Pick on map"
               style={{ width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1px solid ${C.border}`, background: C.accentBg, color: C.accent, flexShrink: 0 }}>
               <Icon name="map" size={16} />
@@ -189,18 +193,13 @@ export default function HomeBooking() {
         )}
       </div>
 
-      {/* ── Map (only when both locations selected) ── */}
-      {showMap && pickup && dropoff && (
-        <div style={{ ...box, padding: 0, overflow: 'hidden', marginBottom: 14 }}>
-          <div style={{ height: 220 }}>
-            <MapView center={[pickup.lat, pickup.lng]} zoom={5} markers={markers}
-              routeCoords={routeData?.geometry?.coordinates?.map(c => [c[1], c[0]])}
-              origin={[pickup.lat, pickup.lng]} destination={[dropoff.lat, dropoff.lng]}
-              className="w-full h-full" />
-          </div>
-          <button onClick={() => setShowMap(false)} style={{ width: '100%', padding: '8px 0', background: 'transparent', border: 'none', borderTop: `1px solid ${C.border}`, cursor: 'pointer', fontSize: 11, fontWeight: 600, color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-            <Icon name="close" size={14} /> Hide Map
-          </button>
+      {/* Route info (no map shown below) */}
+      {pickup && dropoff && routeData && (
+        <div style={{ ...box, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="route" size={18} color="#10B981" />
+          <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>
+            {(routeData.distance / 1000).toFixed(1)} km &bull; ~{Math.round(routeData.duration / 60)} min
+          </span>
         </div>
       )}
 
@@ -334,6 +333,33 @@ export default function HomeBooking() {
       {/* ── Discount ── */}
       <div style={{ marginBottom: 14 }}>
         <input placeholder="Discount code (e.g. FIRST50)" value={discountCode} onChange={e => setDiscountCode(e.target.value.toUpperCase())} style={inp} />
+      </div>
+
+      {/* ── Payment Method ── */}
+      <div style={{ ...box, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(16,185,129,0.12)' : '#ECFDF5' }}>
+            <Icon name="payments" size={14} style={{ color: '#10B981' }} />
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Payment Method</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[
+            { id: 'cash', label: 'Cash', icon: 'money' },
+            { id: 'upi', label: 'UPI', icon: 'qr_code_2' },
+            { id: 'wallet', label: 'Wallet', icon: 'account_balance_wallet' },
+          ].map(p => (
+            <button key={p.id} onClick={() => setPaymentMethod(p.id)} style={{
+              flex: 1, padding: '12px 8px', borderRadius: 12, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+              border: paymentMethod === p.id ? `2px solid #10B981` : `1px solid ${C.border}`,
+              background: paymentMethod === p.id ? (isDark ? 'rgba(16,185,129,0.08)' : '#ECFDF5') : 'transparent',
+              color: paymentMethod === p.id ? '#10B981' : C.sub,
+            }}>
+              <Icon name={p.icon} size={22} />
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{p.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Price Estimate ── */}
