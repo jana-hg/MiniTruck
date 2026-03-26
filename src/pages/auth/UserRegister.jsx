@@ -29,6 +29,9 @@ export default function UserRegister() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [profilePic, setProfilePic] = useState(null);
   const [profilePreview, setProfilePreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -186,6 +189,8 @@ export default function UserRegister() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    if (password !== confirmPassword) { setError('Passwords do not match'); setLoading(false); return; }
+    if (!/^\d{4}$/.test(password)) { setError('Password must be a 4-digit PIN'); setLoading(false); return; }
 
     try {
       const profileB64 = await toBase64(profilePic);
@@ -195,6 +200,7 @@ export default function UserRegister() {
         phone: phone.trim(),
         email: email.trim() || null,
         profilePicture: profileB64,
+        password: password,
       };
 
       const res = await fetch('/api/users/register', {
@@ -230,11 +236,13 @@ export default function UserRegister() {
           </div>
           <h2 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: '0 0 10px' }}>Account Created!</h2>
           <p style={{ fontSize: 14, color: C.sub, lineHeight: 1.6, margin: '0 0 28px' }}>
-            Your account is ready. Start booking rides now!
+            Your account is ready. Use your phone number and the PIN you just set to log in and start booking rides!
           </p>
-          <Link to="/login-user" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: clr }}>
-            <Icon name="arrow_back" size={16} style={{ color: clr }} />
-            Go to Login
+          <Link to="/login-user" style={{ 
+            textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, 
+            width: '100%', padding: '14px 0', borderRadius: 12, background: clr, color: '#fff', fontSize: 15, fontWeight: 700 
+          }}>
+            Log In Now <Icon name="arrow_forward" size={18} style={{ color: '#fff' }} />
           </Link>
         </motion.div>
       </div>
@@ -334,6 +342,47 @@ export default function UserRegister() {
               <div>
                 <label style={labelStyle}>Email Address</label>
                 <input type="email" placeholder="email@example.com (optional)" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />
+              </div>
+            </div>
+          </div>
+
+          {/* Security */}
+          <div style={cardStyle}>
+            <div style={sectionTitle}>
+              <Icon name="security" size={18} style={{ color: clr }} />
+              Security
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={labelStyle}>Set a 4-Digit Login PIN *</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    placeholder="Enter 4-digit PIN"
+                    value={password}
+                    onChange={e => setPassword(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    required
+                    style={{ ...inputStyle, paddingRight: 40, letterSpacing: showPass ? 'default' : '0.5em', fontSize: 16, textAlign: 'center' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 4 }}
+                  >
+                    <Icon name={showPass ? 'visibility_off' : 'visibility'} size={18} />
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>Confirm PIN *</label>
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  placeholder="Re-enter 4-digit PIN"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  required
+                  style={{ ...inputStyle, letterSpacing: showPass ? 'default' : '0.5em', fontSize: 16, textAlign: 'center' }}
+                />
               </div>
             </div>
           </div>

@@ -342,8 +342,10 @@ app.post('/api/auth/register', async (req, res) => {
 // User self-registration
 app.post('/api/users/register', (req, res) => {
   const db = readDB();
-  const { fullName, phone, email, profilePicture } = req.body;
-  if (!fullName || !phone) return res.status(400).json({ error: 'Name and phone are required' });
+  const { fullName, phone, email, profilePicture, password: rawPassword } = req.body;
+  if (!fullName || !phone || !rawPassword) return res.status(400).json({ error: 'Name, phone, and password are required' });
+
+  if (!/^\d{4}$/.test(rawPassword)) return res.status(400).json({ error: 'Password must be a 4-digit PIN' });
 
   // Normalize phone and check duplicates
   const cleanPhone = phone.replace(/\D/g, '');
@@ -357,7 +359,7 @@ app.post('/api/users/register', (req, res) => {
     name: fullName,
     email: email || '',
     phone,
-    password: '1234',
+    password: rawPassword,
     role: 'customer',
     profilePicture: profilePicture || null,
     createdAt: new Date().toISOString(),
