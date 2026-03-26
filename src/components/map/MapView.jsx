@@ -92,6 +92,17 @@ function RecenterMap({ center }) {
   return null;
 }
 
+function MapInstanceCapture({ mapRef }) {
+  const map = useMap();
+  useEffect(() => {
+    if (mapRef) {
+      if (typeof mapRef === 'function') mapRef(map);
+      else mapRef.current = map;
+    }
+  }, [map, mapRef]);
+  return null;
+}
+
 function LocateButton({ onLocate }) {
   const map = useMap();
   const handleLocate = () => {
@@ -150,6 +161,7 @@ export default function MapView({
   fitMarkers = false,
   showLocate = true,
   onClick,
+  mapRef,
   children,
 }) {
   const { isDark } = useTheme();
@@ -169,6 +181,7 @@ export default function MapView({
     >
       <TileLayer url={tileUrl} attribution={tileAttribution} />
 
+      <MapInstanceCapture mapRef={mapRef} />
       {onClick && <MapClickHandler onClick={onClick} />}
 
       {fitMarkers && markers.length >= 2 && <FitBounds markers={markers} />}

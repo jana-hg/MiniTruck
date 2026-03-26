@@ -23,16 +23,20 @@ const TABS = [
   { id: 'trucks', icon: 'local_shipping', label: 'Trucks & Pricing', color: '#F59E0B', dark: '#FBBF24' },
   { id: 'users', icon: 'group', label: 'Users', color: '#EC4899', dark: '#F472B6' },
   { id: 'payments', icon: 'account_balance_wallet', label: 'Payments', color: '#06B6D4', dark: '#22D3EE' },
+  { id: 'fleet', icon: 'map', label: 'Live Fleet', color: '#10B981', dark: '#34D399' },
 ];
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const mob = useIsMobile();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('admin_active_tab') || 'overview');
+  const [mapPicker, setMapPicker] = useState(null); // null | 'pickup' | 'dropoff'
+  const [mapRefMode, setMapRefMode] = useState(null);
+  const [mapPickerCenter, setMapPickerCenter] = useState([19.076, 72.877]);
+  const mapRef = useRef(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [showMap, setShowMap] = useState(false);
   const [bookings, setBookings] = useState([]);
   const [driversList, setDriversList] = useState([]);
   const [trucksList, setTrucksList] = useState([]);
@@ -48,6 +52,11 @@ export default function AdminDashboard() {
     fleetApi.getFleet().then(d => Array.isArray(d) && setFleetData(d)).catch(() => { });
     fetch('/api/users').then(r => r.json()).then(d => Array.isArray(d) && setUsers(d)).catch(() => { });
   }, []);
+
+  // Save tab selection
+  useEffect(() => {
+    localStorage.setItem('admin_active_tab', activeTab);
+  }, [activeTab]);
 
   // Poll fleet & driver locations every 10s for live map updates
   useEffect(() => {
@@ -120,18 +129,6 @@ export default function AdminDashboard() {
 
         {/* Right: Fleet Map + Theme + Profile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Fleet Map Toggle */}
-          <button onClick={() => { const next = !showMap; setShowMap(next); if (next) setTimeout(() => document.getElementById('fleet-map-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); }} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: mob ? '6px 8px' : '6px 12px', borderRadius: 8,
-            background: showMap ? (isDark ? 'rgba(16,185,129,0.15)' : '#ECFDF5') : (isDark ? 'rgba(59,130,246,0.1)' : '#F0F9FF'),
-            color: showMap ? '#10B981' : (isDark ? '#60A5FA' : '#3B82F6'),
-            border: `1px solid ${showMap ? (isDark ? 'rgba(16,185,129,0.3)' : '#A7F3D0') : (isDark ? 'rgba(59,130,246,0.2)' : '#BFDBFE')}`,
-            fontSize: 12, fontWeight: 700, cursor: 'pointer',
-          }}>
-            <Icon name={showMap ? 'map' : 'map'} size={16} filled={showMap} />
-            {!mob && <span>{showMap ? 'Hide Map' : 'Fleet Map'}</span>}
-          </button>
-
           {/* Theme toggle */}
           <button onClick={toggleTheme}
             style={{
@@ -328,12 +325,13 @@ export default function AdminDashboard() {
 
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}>
-            {activeTab === 'overview' && <OverviewTab {...tabData.overview} C={C} isDark={isDark} mob={mob} showMap={showMap} setShowMap={setShowMap} />}
+            {activeTab === 'overview' && <OverviewTab {...tabData.overview} C={C} isDark={isDark} mob={mob} />}
             {activeTab === 'rides' && <RidesTab {...tabData.rides} C={C} isDark={isDark} mob={mob} />}
             {activeTab === 'drivers' && <DriversTab {...tabData.drivers} C={C} isDark={isDark} mob={mob} />}
             {activeTab === 'trucks' && <TrucksTab {...tabData.trucks} C={C} isDark={isDark} mob={mob} />}
             {activeTab === 'users' && <UsersTab {...tabData.users} C={C} isDark={isDark} mob={mob} />}
             {activeTab === 'payments' && <PaymentsTab {...tabData.payments} C={C} isDark={isDark} mob={mob} />}
+            {activeTab === 'fleet' && <FleetTab fleetData={fleetData} driversList={driversList} bookings={bookings} C={C} isDark={isDark} mob={mob} />}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -369,7 +367,7 @@ function TD({ children, bold, accent, align, C }) {
 }
 
 /* ═══ Overview ═══ */
-function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetData, users, totalRevenue, activeRides, completedRides, activeDrivers, C, isDark, mob, showMap, setShowMap }) {
+function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetData, users, totalRevenue, activeRides, completedRides, activeDrivers, C, isDark, mob }) {
   const [selectedDriver, setSelectedDriver] = useState(null);
   // Get bookings for selected driver
   const driverBookings = selectedDriver ? bookings.filter(b => b.driverId === selectedDriver.id) : [];
@@ -498,95 +496,87 @@ function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetDat
 
       {/* Live Fleet Map */}
       <div id="fleet-map-section" />
-      <AnimatePresence>
-        {showMap && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} transition={{ duration: 0.3 }}>
-            <div style={{ borderRadius: mob ? 12 : 16, overflow: 'hidden', border: `1px solid ${isDark ? '#27272A' : '#E2E8F0'}`, background: isDark ? '#18181B' : '#fff', boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.08)' }}>
-              {/* Map Header */}
-              <div style={{ padding: mob ? '10px 12px' : '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: isDark ? 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.05))' : 'linear-gradient(135deg, #ECFDF5, #F0F9FF)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#10B981', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>
-                    <Icon name="satellite_alt" filled size={14} style={{ color: '#fff' }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: mob ? 12 : 13, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {selectedDriver ? selectedDriver.name : 'Live Fleet Map'}
-                      <span style={{ width: 6, height: 6, borderRadius: 3, background: '#10B981', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-                    </div>
-                    <div style={{ fontSize: mob ? 9 : 10, color: C.muted, marginTop: 1 }}>
-                      {selectedDriver ? `${driverBookings.length} active route(s)` : `${fleetData.filter(f => f.status === 'active' || f.status === 'on-trip').length} active · ${fleetData.length} total`}
-                    </div>
-                  </div>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} transition={{ duration: 0.3 }}>
+        <div style={{ borderRadius: mob ? 12 : 16, overflow: 'hidden', border: `1px solid ${isDark ? '#27272A' : '#E2E8F0'}`, background: isDark ? '#18181B' : '#fff', boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.08)' }}>
+          {/* Map Header */}
+          <div style={{ padding: mob ? '10px 12px' : '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: isDark ? 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.05))' : 'linear-gradient(135deg, #ECFDF5, #F0F9FF)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#10B981', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>
+                <Icon name="satellite_alt" filled size={14} style={{ color: '#fff' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: mob ? 12 : 13, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {selectedDriver ? selectedDriver.name : 'Live Fleet Map'}
+                  <span style={{ width: 6, height: 6, borderRadius: 3, background: '#10B981', display: 'inline-block', animation: 'pulse 2s infinite' }} />
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {selectedDriver && (
-                    <button onClick={() => setSelectedDriver(null)}
-                      style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: '#10B981', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6 }}>
-                      All
-                    </button>
-                  )}
-                  <button onClick={() => setShowMap(false)}
-                    style={{ width: 26, height: 26, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: 'none', background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: C.muted }}>
-                    <Icon name="close" size={14} />
-                  </button>
+                <div style={{ fontSize: mob ? 9 : 10, color: C.muted, marginTop: 1 }}>
+                  {selectedDriver ? `${driverBookings.length} active route(s)` : `${fleetData.filter(f => f.status === 'active' || f.status === 'on-trip').length} active · ${fleetData.length} total`}
                 </div>
               </div>
-
-              {/* Selected driver info bar */}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               {selectedDriver && (
-                <div style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, background: isDark ? 'rgba(255,215,0,0.04)' : '#FFFBEB', borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 10, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name="person" filled size={10} style={{ color: isDark ? '#000' : '#fff' }} />
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: C.text }}>{selectedDriver.name}</span>
-                  <span style={{ fontSize: 9, color: C.muted }}>·</span>
-                  <span style={{ fontSize: 9, color: C.muted }}>{selectedDriver.status}</span>
-                  {selectedDriver.rating > 0 && <>
-                    <span style={{ fontSize: 9, color: C.muted }}>·</span>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: isDark ? '#FFD700' : '#F59E0B' }}>★ {selectedDriver.rating}</span>
-                  </>}
-                </div>
-              )}
-
-              {/* Map */}
-              <div style={{ height: mob ? 260 : 380, position: 'relative' }}>
-                <MapView
-                  center={selectedDriver?.location ? [selectedDriver.location.lat, selectedDriver.location.lng] : [19.065, 72.878]}
-                  zoom={selectedDriver ? 14 : 12}
-                  markers={selectedDriver
-                    ? [...(selectedDriver.location ? [{ lat: selectedDriver.location.lat, lng: selectedDriver.location.lng, icon: createFleetActiveIcon() }] : [])]
-                    : fleetData.map(f => ({ lat: f.location?.lat || 19.07, lng: f.location?.lng || 72.87, icon: (f.status === 'active' || f.status === 'on-trip') ? createFleetActiveIcon() : createFleetIdleIcon() }))
-                  }
-                  origin={driverBookings[0]?.pickup?.lat ? [driverBookings[0].pickup.lat, driverBookings[0].pickup.lng] : null}
-                  destination={driverBookings[0]?.dropoff?.lat ? [driverBookings[0].dropoff.lat, driverBookings[0].dropoff.lng] : null}
-                  showLocate={false} className="w-full h-full"
-                />
-                {/* Legend overlay */}
-                <div style={{ position: 'absolute', bottom: 8, left: 8, zIndex: 500, background: isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.95)', borderRadius: 8, padding: '5px 10px', display: 'flex', gap: 10, fontSize: 9, fontWeight: 700, border: `1px solid ${C.border}`, backdropFilter: 'blur(10px)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: 4, background: '#10B981', boxShadow: '0 0 4px rgba(16,185,129,0.5)' }} /> Active</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: 4, background: '#94A3B8' }} /> Idle</span>
-                </div>
-              </div>
-
-              {/* Driver routes list */}
-              {selectedDriver && driverBookings.length > 0 && (
-                <div style={{ borderTop: `1px solid ${C.border}`, maxHeight: 80, overflowY: 'auto' }}>
-                  {driverBookings.map(b => (
-                    <div key={b.id} style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}`, fontSize: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
-                        <Icon name="route" size={12} style={{ color: '#10B981', flexShrink: 0 }} />
-                        <span style={{ fontWeight: 600, color: C.text }}>{b.id}</span>
-                        {!mob && <span style={{ color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.pickup?.address} → {b.dropoff?.address}</span>}
-                      </div>
-                      <StatusBadge status={b.status} />
-                    </div>
-                  ))}
-                </div>
+                <button onClick={() => setSelectedDriver(null)}
+                  style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: '#10B981', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6 }}>
+                  All
+                </button>
               )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+
+          {/* Selected driver info bar */}
+          {selectedDriver && (
+            <div style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, background: isDark ? 'rgba(255,215,0,0.04)' : '#FFFBEB', borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ width: 20, height: 20, borderRadius: 10, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="person" filled size={10} style={{ color: isDark ? '#000' : '#fff' }} />
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 600, color: C.text }}>{selectedDriver.name}</span>
+              <span style={{ fontSize: 9, color: C.muted }}>·</span>
+              <span style={{ fontSize: 9, color: C.muted }}>{selectedDriver.status}</span>
+              {selectedDriver.rating > 0 && <>
+                <span style={{ fontSize: 9, color: C.muted }}>·</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: isDark ? '#FFD700' : '#F59E0B' }}>★ {selectedDriver.rating}</span>
+              </>}
+            </div>
+          )}
+
+          {/* Map */}
+          <div style={{ height: mob ? 260 : 380, position: 'relative' }}>
+            <MapView
+              center={selectedDriver?.location ? [selectedDriver.location.lat, selectedDriver.location.lng] : [19.065, 72.878]}
+              zoom={selectedDriver ? 14 : 12}
+              markers={selectedDriver
+                ? [...(selectedDriver.location ? [{ lat: selectedDriver.location.lat, lng: selectedDriver.location.lng, icon: createFleetActiveIcon() }] : [])]
+                : fleetData.map(f => ({ lat: f.location?.lat || 19.07, lng: f.location?.lng || 72.87, icon: (f.status === 'active' || f.status === 'on-trip') ? createFleetActiveIcon() : createFleetIdleIcon() }))
+              }
+              origin={driverBookings[0]?.pickup?.lat ? [driverBookings[0].pickup.lat, driverBookings[0].pickup.lng] : null}
+              destination={driverBookings[0]?.dropoff?.lat ? [driverBookings[0].dropoff.lat, driverBookings[0].dropoff.lng] : null}
+              showLocate={false} className="w-full h-full"
+            />
+            {/* Legend overlay */}
+            <div style={{ position: 'absolute', bottom: 8, left: 8, zIndex: 500, background: isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.95)', borderRadius: 8, padding: '5px 10px', display: 'flex', gap: 10, fontSize: 9, fontWeight: 700, border: `1px solid ${C.border}`, backdropFilter: 'blur(10px)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: 4, background: '#10B981', boxShadow: '0 0 4px rgba(16,185,129,0.5)' }} /> Active</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: 4, background: '#94A3B8' }} /> Idle</span>
+            </div>
+          </div>
+
+          {/* Driver routes list */}
+          {selectedDriver && driverBookings.length > 0 && (
+            <div style={{ borderTop: `1px solid ${C.border}`, maxHeight: 80, overflowY: 'auto' }}>
+              {driverBookings.map(b => (
+                <div key={b.id} style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}`, fontSize: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
+                    <Icon name="route" size={12} style={{ color: '#10B981', flexShrink: 0 }} />
+                    <span style={{ fontWeight: 600, color: C.text }}>{b.id}</span>
+                    {!mob && <span style={{ color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.pickup?.address} → {b.dropoff?.address}</span>}
+                  </div>
+                  <StatusBadge status={b.status} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </motion.div>
 
       {/* Payments + Drivers */}
       <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : '1fr 1fr', gap: 16 }}>
@@ -840,11 +830,9 @@ function DriversTab({ driversList, C, isDark, mob }) {
                 borderRadius: 12, border: `1px solid ${isDark ? 'rgba(251,191,36,0.2)' : '#FDE68A'}`,
                 background: isDark ? 'rgba(251,191,36,0.04)' : '#FFFEF5', padding: 16,
               }}>
-                {/* Header: picture + name */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                   {pd.profilePicture ? (
-                    <img src={pd.profilePicture.startsWith('data:') ? pd.profilePicture : pd.profilePicture}
-                      alt={pd.name} style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                    <img src={pd.profilePicture} alt={pd.name} style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', border: `1px solid ${C.border}` }} />
                   ) : (
                     <div style={{ width: 44, height: 44, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(52,211,153,0.1)' : '#ECFDF5' }}>
                       <Icon name="person" filled size={22} style={{ color: isDark ? '#34D399' : '#10B981' }} />
@@ -854,72 +842,15 @@ function DriversTab({ driversList, C, isDark, mob }) {
                     <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pd.name}</div>
                     <div style={{ fontSize: 11, color: C.muted }}>{pd.phone}</div>
                   </div>
-                  {pd.city && <span style={{ fontSize: 11, fontWeight: 600, color: C.sub, background: isDark ? '#27272A' : '#F1F5F9', padding: '3px 8px', borderRadius: 6 }}>{pd.city}</span>}
                 </div>
 
-                {/* Vehicle info */}
-                {(pd.vehicleDetails || pd.vehicleType) && (
-                  <div style={{ padding: '10px 12px', borderRadius: 8, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}`, marginBottom: 10 }}>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Vehicle Info</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
-                      {pd.vehicleType && <span>{pd.vehicleType} </span>}
-                      {pd.vehicleDetails?.model && <span>- {pd.vehicleDetails.model} </span>}
-                      {pd.vehicleDetails?.make && <span>({pd.vehicleDetails.make})</span>}
-                    </div>
-                    {(pd.vehicleDetails?.plateNumber || pd.registrationNumber) && (
-                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Reg: {pd.vehicleDetails?.plateNumber || pd.registrationNumber}</div>
-                    )}
-                  </div>
-                )}
+                <div style={{ fontSize: 12, color: C.text, marginBottom: 12 }}>
+                  Applied for <b>{pd.truckType}</b> in {pd.city}
+                </div>
 
-                {/* License info */}
-                {(pd.licenseNumber || pd.licenseExpiry) && (
-                  <div style={{ padding: '10px 12px', borderRadius: 8, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}`, marginBottom: 10 }}>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>License</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      {pd.licenseNumber && <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{pd.licenseNumber}</span>}
-                      {pd.licenseExpiry && <span style={{ fontSize: 11, color: C.muted }}>Exp: {new Date(pd.licenseExpiry).toLocaleDateString()}</span>}
-                    </div>
-                  </div>
-                )}
-
-                {/* Vehicle picture */}
-                {pd.vehiclePicture && (
-                  <div style={{ marginBottom: 10 }}>
-                    <img src={pd.vehiclePicture.startsWith('data:') ? pd.vehiclePicture : pd.vehiclePicture}
-                      alt="Vehicle" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
-                  </div>
-                )}
-
-                {/* Applied date */}
-                {(pd.appliedAt || pd.appliedDate) && (
-                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Icon name="calendar_today" size={13} /> Applied: {new Date(pd.appliedAt || pd.appliedDate).toLocaleDateString()}
-                  </div>
-                )}
-
-                {/* Approve / Reject buttons */}
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button
-                    onClick={() => handleApproval(pd.id, true)}
-                    disabled={approvingId === pd.id}
-                    style={{
-                      flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
-                      fontSize: 12, fontWeight: 700, background: '#10B981', color: '#fff',
-                      opacity: approvingId === pd.id ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    }}>
-                    <Icon name="check_circle" size={16} /> Approve
-                  </button>
-                  <button
-                    onClick={() => handleApproval(pd.id, false)}
-                    disabled={approvingId === pd.id}
-                    style={{
-                      flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
-                      fontSize: 12, fontWeight: 700, background: '#EF4444', color: '#fff',
-                      opacity: approvingId === pd.id ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    }}>
-                    <Icon name="cancel" size={16} /> Reject
-                  </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => handleApproval(pd.id, true)} style={{ flex: 1, padding: '8px', borderRadius: 8, background: '#10B981', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Approve</button>
+                  <button onClick={() => handleApproval(pd.id, false)} style={{ flex: 1, padding: '8px', borderRadius: 8, background: '#EF4444', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Reject</button>
                 </div>
               </div>
             ))}
@@ -927,374 +858,47 @@ function DriversTab({ driversList, C, isDark, mob }) {
         </div>
       )}
 
-      {/* Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-        {drivers.filter(d => {
-          if (!searchQuery) return true;
-          const q = searchQuery.toLowerCase();
-          return (d.id?.toLowerCase().includes(q) || d.name?.toLowerCase().includes(q) || d.phone?.replace(/\D/g, '').includes(q.replace(/\D/g, '')) || d.city?.toLowerCase().includes(q) || d.licenseNumber?.toLowerCase().includes(q) || d.vehicleDetails?.plateNumber?.toLowerCase().includes(q));
-        }).map(d => (
+      {/* Driver List */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+        {drivers.map(d => (
           <Box key={d.id} C={C}>
             <div style={{ padding: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: isDark ? 'rgba(52,211,153,0.1)' : '#ECFDF5' }}>
-                  <Icon name="person" filled size={22} style={{ color: isDark ? '#34D399' : '#10B981' }} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>ID: {d.id}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: isDark ? 'rgba(52,211,153,0.1)' : '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="person" size={24} style={{ color: '#10B981' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{d.name}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{d.id}</div>
+                  </div>
                 </div>
                 <StatusBadge status={d.status} />
               </div>
-              {/* Truck Type & Pay */}
-              {(() => {
-                const tt = TRUCK_TYPES.find(t => t.id === d.truckType) || TRUCK_TYPES.find(t => t.id === 'medium');
-                return (
-                  <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                    <div style={{ flex: 1, padding: '10px 12px', borderRadius: 8, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}` }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Truck Type</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Icon name={tt.icon} filled size={16} style={{ color: C.accent }} />
-                        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{tt.label.split('(')[0].trim()}</span>
-                      </div>
-                    </div>
-                    <div style={{ padding: '10px 12px', borderRadius: 8, background: isDark ? 'rgba(255,215,0,0.06)' : '#FFFBEB', border: `1px solid ${isDark ? 'rgba(255,215,0,0.15)' : '#FEF3C7'}`, minWidth: 90 }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Pay Rate</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: isDark ? '#FFD700' : '#F59E0B' }}>{d.payRate || tt.payRate}/km</div>
-                    </div>
-                  </div>
-                );
-              })()}
-              {/* Vehicle info */}
-              {d.vehicleDetails?.make && (
-                <div style={{ padding: '10px 12px', borderRadius: 8, background: isDark ? '#27272A' : '#F8FAFC', marginBottom: 14, border: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Vehicle (Owner: {d.name})</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{d.vehicleDetails.make} {d.vehicleDetails.model} ({d.vehicleDetails.year})</div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{d.vehicleDetails.plateNumber}</div>
-                </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
-                {[{ l: 'Rating', v: d.rating, star: true }, { l: 'Base Pay', v: `₹${d.basePay || (TRUCK_TYPES.find(t => t.id === d.truckType) || TRUCK_TYPES[1]).basePay}` }, { l: 'Earned', v: `₹${d.earnings?.toLocaleString() || '0'}` }].map(s => (
-                  <div key={s.l}>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{s.l}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginTop: 4, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      {s.star && <Icon name="star" filled size={14} style={{ color: '#FBBF24' }} />}{s.v}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="local_shipping" size={14} />{d.truckId || 'N/A'}</span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => setViewDriver(d)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: isDark ? '#60A5FA' : '#3B82F6' }}>
-                    <Icon name="visibility" size={14} /> View
-                  </button>
-                  <button onClick={() => openEdit(d)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: C.accent }}>
-                    <Icon name="edit" size={14} /> Edit
-                  </button>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 12, color: C.sub }}>{d.city}</span>
+                <button onClick={() => setEditDriver(d)} style={{ background: 'none', border: 'none', color: C.accent, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Edit</button>
               </div>
             </div>
           </Box>
         ))}
-        {drivers.length === 0 && <div style={{ gridColumn: '1/-1', padding: '48px 0', textAlign: 'center', fontSize: 13, color: C.muted }}>No drivers</div>}
-        {drivers.length > 0 && searchQuery && drivers.filter(d => { const q = searchQuery.toLowerCase(); return (d.id?.toLowerCase().includes(q) || d.name?.toLowerCase().includes(q) || d.phone?.replace(/\D/g, '').includes(q.replace(/\D/g, ''))); }).length === 0 && (
-          <div style={{ gridColumn: '1/-1', padding: '40px 0', textAlign: 'center' }}>
-            <Icon name="search_off" size={36} style={{ color: C.muted, marginBottom: 8 }} />
-            <div style={{ fontSize: 13, color: C.muted }}>No driver found for "{searchQuery}"</div>
-          </div>
-        )}
       </div>
-
-      {/* View Driver Detail Modal */}
-      <AnimatePresence>
-        {viewDriver && (
-          <Modal open={!!viewDriver} onClose={() => setViewDriver(null)} title={`Driver: ${viewDriver.name}`} C={C} isDark={isDark}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Profile */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                {viewDriver.profilePicture ? (
-                  <img src={viewDriver.profilePicture} alt={viewDriver.name} style={{ width: 64, height: 64, borderRadius: 14, objectFit: 'cover', border: `2px solid ${C.border}` }} />
-                ) : (
-                  <div style={{ width: 64, height: 64, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(52,211,153,0.1)' : '#ECFDF5' }}>
-                    <Icon name="person" filled size={32} style={{ color: isDark ? '#34D399' : '#10B981' }} />
-                  </div>
-                )}
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{viewDriver.name}</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>ID: {viewDriver.id}</div>
-                  <div style={{ marginTop: 4 }}><StatusBadge status={viewDriver.status} /></div>
-                </div>
-              </div>
-
-              {/* Contact & Location */}
-              <div style={{ padding: '12px 14px', borderRadius: 10, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Contact & Location</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>Phone</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.phone || '—'}</div></div>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>City</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.city || '—'}</div></div>
-                </div>
-              </div>
-
-              {/* Vehicle Details */}
-              <div style={{ padding: '12px 14px', borderRadius: 10, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Vehicle Details</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>Type</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.vehicleDetails?.type || viewDriver.truckType || '—'}</div></div>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>Brand</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.vehicleDetails?.make || '—'}</div></div>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>Model</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.vehicleDetails?.model || '—'}</div></div>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>Year</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.vehicleDetails?.year || '—'}</div></div>
-                  <div style={{ gridColumn: '1 / -1' }}><span style={{ fontSize: 10, color: C.muted }}>Registration Number</span><div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: '0.05em' }}>{viewDriver.vehicleDetails?.regNumber || viewDriver.vehicleDetails?.plateNumber || '—'}</div></div>
-                </div>
-              </div>
-
-              {/* License Details */}
-              <div style={{ padding: '12px 14px', borderRadius: 10, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>License Details</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>License Number</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.licenseNumber || '—'}</div></div>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>Expiry Date</span><div style={{ fontSize: 13, fontWeight: 600, color: viewDriver.licenseExpiry && new Date(viewDriver.licenseExpiry) < new Date() ? '#EF4444' : C.text }}>{viewDriver.licenseExpiry ? new Date(viewDriver.licenseExpiry).toLocaleDateString() : '—'}</div></div>
-                </div>
-              </div>
-
-              {/* Performance */}
-              <div style={{ padding: '12px 14px', borderRadius: 10, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Performance</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>Rating</span><div style={{ fontSize: 15, fontWeight: 800, color: isDark ? '#FFD700' : '#F59E0B', display: 'flex', alignItems: 'center', gap: 3 }}><Icon name="star" filled size={14} />{viewDriver.rating || 0}</div></div>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>Earnings</span><div style={{ fontSize: 15, fontWeight: 800, color: C.accent }}>₹{viewDriver.earnings?.toLocaleString() || '0'}</div></div>
-                  <div><span style={{ fontSize: 10, color: C.muted }}>Trips</span><div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{viewDriver.stats?.totalTrips || 0}</div></div>
-                </div>
-              </div>
-
-              {/* Photos & Documents */}
-              {(viewDriver.vehiclePicture || viewDriver.uploadedDocuments) && (
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Photos & Documents</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                    {viewDriver.vehiclePicture && (
-                      <div>
-                        <img src={viewDriver.vehiclePicture} alt="Vehicle" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
-                        <div style={{ fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center', fontWeight: 600 }}>Vehicle</div>
-                      </div>
-                    )}
-                    {viewDriver.uploadedDocuments?.rcFront && (
-                      <div>
-                        <img src={viewDriver.uploadedDocuments.rcFront} alt="RC Front" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
-                        <div style={{ fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center', fontWeight: 600 }}>RC Front</div>
-                      </div>
-                    )}
-                    {viewDriver.uploadedDocuments?.rcBack && (
-                      <div>
-                        <img src={viewDriver.uploadedDocuments.rcBack} alt="RC Back" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
-                        <div style={{ fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center', fontWeight: 600 }}>RC Back</div>
-                      </div>
-                    )}
-                    {viewDriver.uploadedDocuments?.dlFront && (
-                      <div>
-                        <img src={viewDriver.uploadedDocuments.dlFront} alt="DL Front" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
-                        <div style={{ fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center', fontWeight: 600 }}>DL Front</div>
-                      </div>
-                    )}
-                    {viewDriver.uploadedDocuments?.dlBack && (
-                      <div>
-                        <img src={viewDriver.uploadedDocuments.dlBack} alt="DL Back" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
-                        <div style={{ fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center', fontWeight: 600 }}>DL Back</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Dates */}
-              <div style={{ paddingTop: 8, borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {(viewDriver.appliedAt || viewDriver.appliedDate) && (
-                  <div style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Icon name="calendar_today" size={13} /> Registered: {new Date(viewDriver.appliedAt || viewDriver.appliedDate).toLocaleDateString()}
-                  </div>
-                )}
-                {viewDriver.lastEditedAt && (
-                  <div style={{ fontSize: 11, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Icon name="edit_note" size={13} /> Last edited: {new Date(viewDriver.lastEditedAt).toLocaleString()}
-                    {viewDriver.lastEditedFields?.length > 0 && <span style={{ fontWeight: 600 }}> ({viewDriver.lastEditedFields.join(', ')})</span>}
-                  </div>
-                )}
-              </div>
-            </div>
-          </Modal>
-        )}
-      </AnimatePresence>
-
-      {/* Add/Edit Modal */}
-      <AnimatePresence>
-        {showAdd && (
-          <Modal open={showAdd} onClose={() => setShowAdd(false)} title={editDriver ? `Edit Driver: ${editDriver.name}` : 'Add New Driver'} C={C} isDark={isDark}>
-            {/* Info banner */}
-            {!editDriver && (
-              <div style={{ padding: '8px 12px', borderRadius: 8, background: isDark ? 'rgba(59,130,246,0.08)' : '#EFF6FF', border: `1px solid ${isDark ? 'rgba(59,130,246,0.2)' : '#BFDBFE'}`, marginBottom: 14, fontSize: 11, color: isDark ? '#60A5FA' : '#2563EB', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Icon name="info" size={14} /> All fields optional. Driver will be notified to complete missing details.
-              </div>
-            )}
-
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Personal Info</div>
-            <ModalInput label="Full Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Driver name" C={C} />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <ModalInput label="Phone" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} placeholder="+91 9876543210" C={C} />
-              <ModalInput label="City" value={form.city} onChange={v => setForm(f => ({ ...f, city: v }))} placeholder="e.g. Mumbai" C={C} />
-            </div>
-
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, marginTop: 14 }}>License Info</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <ModalInput label="License Number" value={form.licenseNumber} onChange={v => setForm(f => ({ ...f, licenseNumber: v }))} placeholder="TN01 20190012345" C={C} />
-              <ModalInput label="License Expiry" value={form.licenseExpiry} onChange={v => setForm(f => ({ ...f, licenseExpiry: v }))} placeholder="" type="date" C={C} />
-            </div>
-
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, marginTop: 14 }}>Truck & Vehicle</div>
-
-            {/* Truck Type Select */}
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Truck Type</div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {TRUCK_TYPES.map(tt => {
-                  const selected = form.truckType === tt.id;
-                  return (
-                    <button key={tt.id} onClick={() => setForm(f => ({ ...f, truckType: tt.id }))}
-                      style={{
-                        flex: 1, padding: '10px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
-                        border: selected ? `2px solid ${C.accent}` : `1px solid ${C.border}`,
-                        background: selected ? C.accentBg : 'transparent',
-                      }}>
-                      <Icon name={tt.icon} filled size={18} style={{ color: selected ? C.accent : C.muted, display: 'block', margin: '0 auto 4px' }} />
-                      <div style={{ fontSize: 10, fontWeight: 600, color: selected ? C.text : C.sub }}>{tt.id.charAt(0).toUpperCase() + tt.id.slice(1)}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Vehicle Brand - button grid */}
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Vehicle Brand</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-                {Object.keys(INDIAN_TRUCKS).map(brand => {
-                  const sel = selectedBrand === brand;
-                  return (
-                    <button key={brand} onClick={() => { setSelectedBrand(brand); setForm(f => ({ ...f, make: brand, model: '' })); setModelOptions(ALL_TRUCK_MODELS.filter(t => t.brand === brand)); }}
-                      style={{ padding: '8px 4px', borderRadius: 6, cursor: 'pointer', textAlign: 'center', border: sel ? `2px solid ${C.accent}` : `1px solid ${C.border}`, background: sel ? C.accentBg : 'transparent', fontSize: 10, fontWeight: sel ? 700 : 500, color: sel ? C.accent : C.text }}>
-                      {brand}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Vehicle Model - list from selected brand */}
-            {modelOptions.length > 0 && (
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Vehicle Model {form.model && <span style={{ color: C.accent }}>✓ {form.make} {form.model}</span>}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 4, maxHeight: 140, overflowY: 'auto' }}>
-                  {modelOptions.map((t, i) => {
-                    const sel = form.model === t.model;
-                    return (
-                      <button key={i} onClick={() => setForm(f => ({ ...f, model: t.model }))}
-                        style={{ padding: '8px 6px', borderRadius: 6, cursor: 'pointer', textAlign: 'left', border: sel ? `2px solid ${C.accent}` : `1px solid ${C.border}`, background: sel ? C.accentBg : 'transparent', fontSize: 11, fontWeight: sel ? 700 : 500, color: sel ? C.accent : C.text, display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Icon name="local_shipping" size={12} style={{ color: sel ? C.accent : C.muted }} /> {t.model}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <ModalInput label="Year" value={form.year} onChange={v => setForm(f => ({ ...f, year: v }))} placeholder="2024" type="number" C={C} />
-              <ModalInput label="Reg Number" value={form.plateNumber} onChange={v => setForm(f => ({ ...f, plateNumber: v }))} placeholder="MH 04 AB 1234" C={C} />
-            </div>
-
-            {/* Document Uploads */}
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, marginTop: 14 }}>Documents & Photos</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-              {[
-                { key: 'profilePicture', label: 'Profile', icon: 'person' },
-                { key: 'vehiclePicture', label: 'Vehicle', icon: 'directions_car' },
-                { key: 'rcFront', label: 'RC Front', icon: 'description' },
-                { key: 'rcBack', label: 'RC Back', icon: 'flip' },
-                { key: 'dlFront', label: 'DL Front', icon: 'badge' },
-                { key: 'dlBack', label: 'DL Back', icon: 'flip' },
-              ].map(doc => (
-                <div key={doc.key} style={{ textAlign: 'center' }}>
-                  <input type="file" accept="image/*" id={`admin-${doc.key}`} style={{ display: 'none' }}
-                    onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onloadend = () => setForm(prev => ({ ...prev, [doc.key]: r.result })); r.readAsDataURL(f); }} />
-                  {form[doc.key] ? (
-                    <div style={{ position: 'relative' }}>
-                      <img src={form[doc.key]} alt={doc.label} style={{ width: '100%', height: 56, objectFit: 'cover', borderRadius: 8, border: `2px solid ${C.accent}` }} />
-                      <button onClick={() => setForm(f => ({ ...f, [doc.key]: null }))}
-                        style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: 9, background: '#EF4444', border: '2px solid white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', padding: 0 }}>
-                        <Icon name="close" size={10} />
-                      </button>
-                    </div>
-                  ) : (
-                    <label htmlFor={`admin-${doc.key}`}
-                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '12px 4px', borderRadius: 8, border: `1.5px dashed ${C.border}`, cursor: 'pointer', background: 'transparent' }}>
-                      <Icon name={doc.icon} size={18} style={{ color: C.muted }} />
-                    </label>
-                  )}
-                  <div style={{ fontSize: 8, fontWeight: 600, color: C.muted, marginTop: 3 }}>{doc.label}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Missing fields warning */}
-            {!editDriver && (() => {
-              const m = [];
-              if (!form.name) m.push('Name');
-              if (!form.phone) m.push('Phone');
-              if (!form.licenseNumber) m.push('License');
-              if (!form.plateNumber) m.push('Reg Number');
-              if (m.length === 0) return null;
-              return (
-                <div style={{ padding: '8px 12px', borderRadius: 8, background: isDark ? 'rgba(251,191,36,0.08)' : '#FFFBEB', border: `1px solid ${isDark ? 'rgba(251,191,36,0.2)' : '#FDE68A'}`, marginTop: 10, fontSize: 11, color: isDark ? '#FBBF24' : '#92400E', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                  <Icon name="warning" size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span>Missing: {m.join(', ')}. Driver will be notified daily to complete these.</span>
-                </div>
-              );
-            })()}
-
-            <button onClick={handleSave} disabled={saving}
-              style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, marginTop: 12, background: C.accent, color: isDark ? '#000' : '#fff', opacity: saving ? 0.6 : 1 }}>
-              {saving ? 'Saving...' : editDriver ? 'Update Driver' : 'Add Driver'}
-            </button>
-          </Modal>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
 
-/* ═══ Trucks ═══ */
+/* ═══ Trucks & Pricing Tab ═══ */
 function TrucksTab({ trucksList, C, isDark, mob }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editTruck, setEditTruck] = useState(null);
-  const [form, setForm] = useState({ label: '', capacity: '', price: '', kmCharge: '', icon: 'local_shipping', ownerName: '' });
+  const [form, setForm] = useState({ label: '', capacity: '', price: '', kmCharge: '', icon: 'local_shipping' });
   const [truckItems, setTruckItems] = useState(trucksList);
-  const [driverNames, setDriverNames] = useState({});
   const [saving, setSaving] = useState(false);
+  const [driverNames, setDriverNames] = useState({});
 
-  useEffect(() => { setTruckItems(trucksList); }, [trucksList]);
-
-  // Fetch driver names for owner display
-  useEffect(() => {
-    fetch('/api/drivers').then(r => r.json()).then(drivers => {
-      if (!Array.isArray(drivers)) return;
-      const map = {};
-      drivers.forEach(d => { if (d.truckId) map[d.truckId] = d.name; });
-      setDriverNames(map);
-    }).catch(() => { });
-  }, []);
-
-  const openAdd = () => { setForm({ label: '', capacity: '', price: '', kmCharge: '', icon: 'local_shipping', ownerName: '' }); setEditTruck(null); setShowAdd(true); };
+  const openAdd = () => { setForm({ label: '', capacity: '', price: '', kmCharge: '', icon: 'local_shipping' }); setEditTruck(null); setShowAdd(true); };
   const openEdit = (t) => {
-    setForm({ label: t.label, capacity: t.capacity, price: String(t.price), kmCharge: String(t.kmCharge), icon: t.icon || 'local_shipping', ownerName: '' });
+    setForm({ label: t.label, capacity: t.capacity, price: String(t.price), kmCharge: String(t.kmCharge), icon: t.icon || 'local_shipping' });
     setEditTruck(t); setShowAdd(true);
   };
 
@@ -1797,6 +1401,102 @@ function PricingTab_unused({ C, isDark, mob }) {
           </div>
         </div>
       </Box>
+    </div>
+  );
+}
+
+/* ═══ Live Fleet Map Tab ═══ */
+function FleetTab({ fleetData, driversList, bookings, C, isDark, mob }) {
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const driverBookings = selectedDriver ? bookings.filter(b => b.driverId === selectedDriver.id) : [];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : '1fr 2.5fr', gap: 20 }}>
+        {/* Driver List sidebar */}
+        <Box C={C} s={{ maxHeight: mob ? '300px' : '700px', overflowY: 'auto' }}>
+          <BoxHead title="Drivers" icon="badge" C={C} right={`${driversList.length} Online`} />
+          {driversList.map(d => {
+            const isSelected = selectedDriver?.id === d.id;
+            const liveInfo = fleetData.find(f => f.driverId === d.id);
+            const status = liveInfo?.status || d.status;
+            return (
+              <div key={d.id}
+                onClick={() => setSelectedDriver(isSelected ? null : d)}
+                style={{
+                  padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  borderBottom: `1px solid ${C.border}`, cursor: 'pointer', transition: 'all 0.15s',
+                  background: isSelected ? (isDark ? 'rgba(59,130,246,0.1)' : '#EFF6FF') : 'transparent',
+                  borderLeft: isSelected ? `4px solid ${isDark ? '#FFD700' : '#3B82F6'}` : '4px solid transparent',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 10, background: isDark ? '#27272A' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="person" filled={isSelected} size={18} style={{ color: isSelected ? (isDark ? '#FFD700' : '#3B82F6') : C.sub }} />
+                    </div>
+                    <div style={{ position: 'absolute', bottom: -2, right: -2, width: 10, height: 10, borderRadius: 5, background: status === 'active' || status === 'on-trip' ? '#10B981' : '#94A3B8', border: `2px solid ${C.card}` }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{d.name}</div>
+                    <div style={{ fontSize: 10, color: C.muted, textTransform: 'capitalize' }}>{status}</div>
+                  </div>
+                </div>
+                {isSelected && <Icon name="my_location" size={14} style={{ color: isDark ? '#FFD700' : '#3B82F6' }} />}
+              </div>
+            );
+          })}
+        </Box>
+
+        {/* Map area */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <Box C={C} s={{ height: mob ? 400 : 600, position: 'relative' }}>
+            <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 500, background: isDark ? 'rgba(24,24,27,0.85)' : 'rgba(255,255,255,0.85)', padding: '6px 12px', borderRadius: 8, backdropFilter: 'blur(8px)', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="satellite_alt" size={14} style={{ color: '#10B981' }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>
+                {selectedDriver ? `Tracking: ${selectedDriver.name}` : 'Real-time Fleet Live View'}
+              </span>
+            </div>
+            <MapView
+              center={selectedDriver?.location ? [selectedDriver.location.lat, selectedDriver.location.lng] : [19.076, 72.877]}
+              zoom={selectedDriver ? 15 : 12}
+              markers={selectedDriver
+                ? [{ lat: selectedDriver.location?.lat || 19.07, lng: selectedDriver.location?.lng || 72.87, icon: createFleetActiveIcon() }]
+                : fleetData.map(f => ({ lat: f.location?.lat || 19.07, lng: f.location?.lng || 72.87, icon: (f.status === 'active' || f.status === 'on-trip') ? createFleetActiveIcon() : createFleetIdleIcon() }))
+              }
+              showLocate={false}
+              className="w-full h-full"
+            />
+            {/* Legend overlay */}
+            <div style={{ position: 'absolute', bottom: 12, right: 12, zIndex: 500, background: isDark ? 'rgba(24,24,27,0.85)' : 'rgba(255,255,255,0.85)', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', gap: 12, fontSize: 10, fontWeight: 600 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#10B981' }} /> Active</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#94A3B8' }} /> Idle</span>
+            </div>
+          </Box>
+
+          {selectedDriver && driverBookings.length > 0 && (
+            <Box C={C}>
+              <BoxHead title="Driver Active Routes" icon="route" C={C} />
+              <div style={{ padding: '0 16px' }}>
+                {driverBookings.map(b => (
+                  <div key={b.id} style={{ padding: '12px 0', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 6, background: `${isDark ? '#FFD700' : '#3B82F6'}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon name="local_shipping" size={16} style={{ color: isDark ? '#FFD700' : '#3B82F6' }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{b.id}</div>
+                        <div style={{ fontSize: 11, color: C.sub }}>{b.pickup?.address?.slice(0, 30)}...</div>
+                      </div>
+                    </div>
+                    <StatusBadge status={b.status} />
+                  </div>
+                ))}
+              </div>
+            </Box>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

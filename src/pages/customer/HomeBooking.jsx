@@ -126,12 +126,17 @@ export default function HomeBooking() {
     );
   };
 
-  // Handle map tap to select location
-  const handleMapSelect = async (lat, lng) => {
+  // Handle finalizing the map-picked location
+  const handleMapConfirm = async () => {
     if (!mapPicker) return;
-    await handleSetLocation(lat, lng, mapPicker);
+    const center = mapRef?.current?.getCenter();
+    if (center) {
+      await handleSetLocation(center.lat, center.lng, mapPicker);
+    }
     setMapPicker(null);
   };
+
+  const mapRef = { current: null };
 
   const markers = [];
   if (pickup) markers.push({ lat: pickup.lat, lng: pickup.lng, label: 'Pickup' });
@@ -509,6 +514,48 @@ export default function HomeBooking() {
                 style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: mapPicker === 'pickup' ? '#10B981' : '#3B82F6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 <Icon name="check" size={18} />
                 Set {mapPicker === 'pickup' ? 'Pickup' : 'Drop-off'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Map Picker Modal ── */}
+      {mapPicker && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ position: 'absolute', top: 20, left: 16, right: 16, zIndex: 501, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ background: C.card, padding: '8px 16px', borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${C.border}` }}>
+              <div style={{ width: 10, height: 10, borderRadius: 5, background: mapPicker === 'pickup' ? '#10B981' : '#3B82F6' }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Set {mapPicker === 'pickup' ? 'Pickup' : 'Drop-off'}</span>
+            </div>
+            <button onClick={() => setMapPicker(null)} style={{ width: 36, height: 36, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+              <Icon name="close" size={20} />
+            </button>
+          </div>
+
+          <div style={{ flex: 1, position: 'relative' }}>
+            <MapView
+              center={mapPickerCenter}
+              zoom={16} // High zoom for precision
+              showLocate={true}
+              onMove={(e) => {
+                // Leaflet handles move natively, we just use a fixed crosshair overlay
+              }}
+              mapRef={mapRef}
+            >
+              {/* Optional: Add custom TileLayer for higher accuracy if needed */}
+            </MapView>
+
+            {/* Fixed Crosshair / Center Pin */}
+            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -100%)', zIndex: 502, pointerEvents: 'none' }}>
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ width: 32, height: 42, background: 'url("https://maps.google.com/mapfiles/ms/icons/red-pushpin.png") center bottom no-repeat', backgroundSize: 'contain' }} />
+              </div>
+            </div>
+            
+            <div style={{ position: 'absolute', bottom: 30, left: 24, right: 24, zIndex: 502 }}>
+              <button onClick={handleMapConfirm}
+                style={{ width: '100%', padding: '16px 0', borderRadius: 14, background: '#000', color: '#FFD700', fontSize: 16, fontWeight: 800, border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.4)', letterSpacing: '0.05em' }}>
+                Confirm Location
               </button>
             </div>
           </div>
