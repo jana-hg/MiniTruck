@@ -30,7 +30,7 @@ export default function Profile() {
   const handleSave = () => { setSaving(true); usersApi.updateProfile(user.id, { ...form, preferences: { notifications: notifs, defaultPayment: profile?.preferences?.defaultPayment || 'wallet' } }).then(d => { setProfile(d); setEditing(false); }).finally(() => setSaving(false)); };
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '24px 16px 120px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: '24px 0 40px', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>My Profile</div>
 
       {/* Avatar */}

@@ -30,7 +30,7 @@ export default function Support() {
   const statusMap = { open: 'confirmed', 'in-progress': 'in-transit', resolved: 'completed' };
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '24px 16px 120px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: '24px 0 40px', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>Support</div>
         <button onClick={() => setShowNew(!showNew)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: C.accent, color: isDark ? '#000' : '#fff' }}>

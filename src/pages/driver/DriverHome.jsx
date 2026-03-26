@@ -190,7 +190,7 @@ export default function DriverHome() {
   const stats = driver?.stats || {};
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: '16px 12px 100px' }}>
+    <div style={{ maxWidth: 600, margin: '0 auto', padding: '16px 0 60px' }}>
 
       {/* ── Driver Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>

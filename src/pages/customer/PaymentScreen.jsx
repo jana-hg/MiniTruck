@@ -71,7 +71,7 @@ export default function PaymentScreen() {
   }
 
   return (
-    <div style={{ maxWidth: 500, margin: '0 auto', padding: '24px 16px 120px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ maxWidth: 500, margin: '0 auto', padding: '24px 0 40px', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>Payment</div>
       {/* Summary */}
       <div style={{ ...box, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

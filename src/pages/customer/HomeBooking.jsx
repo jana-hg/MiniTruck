@@ -144,7 +144,7 @@ export default function HomeBooking() {
   const dropBtn = { width: '100%', textAlign: 'left', padding: '10px 14px', fontSize: 13, color: C.text, background: 'transparent', border: 'none', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', borderBottom: `1px solid ${C.border}` };
 
   return (
-    <div style={{ maxWidth: 500, margin: '0 auto', padding: '16px 0 100px', width: '100%', boxSizing: 'border-box' }}>
+    <div style={{ maxWidth: 500, margin: '0 auto', padding: '16px 0 60px', width: '100%', boxSizing: 'border-box' }}>
       {/* Title */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 4 }}>Logistics</div>

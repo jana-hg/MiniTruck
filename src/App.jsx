@@ -50,8 +50,8 @@ function AppRoutes() {
 
       <main style={{
         width: '100%',
-        paddingTop: isAuthRoute ? 0 : isTrackingRoute ? 56 : isAdminRoute ? 0 : 80,
-        paddingBottom: isAuthRoute ? 0 : isTrackingRoute ? 0 : isAdminRoute ? 0 : 100,
+        paddingTop: isAuthRoute ? 0 : isTrackingRoute ? 56 : isAdminRoute ? 0 : 72,
+        paddingBottom: isAuthRoute ? 0 : isTrackingRoute ? 0 : isAdminRoute ? 0 : 84,
         paddingLeft: isAuthRoute || isTrackingRoute || isAdminRoute ? 0 : 16,
         paddingRight: isAuthRoute || isTrackingRoute || isAdminRoute ? 0 : 16,
         overflowY: 'visible',
