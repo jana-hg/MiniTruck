@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -127,16 +127,7 @@ export default function HomeBooking() {
   };
 
   // Handle finalizing the map-picked location
-  const handleMapConfirm = async () => {
-    if (!mapPicker) return;
-    const center = mapRef?.current?.getCenter();
-    if (center) {
-      await handleSetLocation(center.lat, center.lng, mapPicker);
-    }
-    setMapPicker(null);
-  };
-
-  const mapRef = { current: null };
+  const mapRef = useRef(null);
 
   const markers = [];
   if (pickup) markers.push({ lat: pickup.lat, lng: pickup.lng, label: 'Pickup' });
@@ -414,114 +405,9 @@ export default function HomeBooking() {
         {booking ? <><Icon name="progress_activity" size={20} /> Booking...</> : <><Icon name="check_circle" size={20} /> Confirm Booking</>}
       </button>
 
-      {/* ── Fullscreen Map Picker Overlay ── */}
-      {mapPicker && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', background: C.bg }}>
-          {/* Top bar */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: C.card, borderBottom: `1px solid ${C.border}`, flexShrink: 0, zIndex: 10000 }}>
-            <button onClick={() => setMapPicker(null)}
-              style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: 'none', background: isDark ? '#27272A' : '#F1F5F9', color: C.sub }}>
-              <Icon name="close" size={20} />
-            </button>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
-                Select {mapPicker === 'pickup' ? 'Pickup' : 'Drop-off'}
-              </div>
-              <div style={{ fontSize: 11, color: C.muted }}>Tap on the map to choose</div>
-            </div>
-            {/* Open in Google Maps */}
-            <button onClick={() => {
-              const lat = mapPickerCenter[0];
-              const lng = mapPickerCenter[1];
-              window.open(`https://www.google.com/maps/@${lat},${lng},15z`, '_blank');
-            }}
-              style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: 'none', background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', color: '#10B981' }}>
-              <Icon name="open_in_new" size={18} />
-            </button>
-          </div>
-
-          {/* Map */}
-          <div style={{ flex: 1, position: 'relative' }}>
-            <MapView
-              center={mapPickerCenter}
-              zoom={13}
-              markers={[]}
-              showLocate={true}
-              className="w-full h-full"
-              onClick={(e) => {
-                if (e?.latlng) handleMapSelect(e.latlng.lat, e.latlng.lng);
-              }}
-            />
-            {/* Center pin indicator */}
-            <div style={{
-              position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -100%)',
-              pointerEvents: 'none', zIndex: 10000,
-            }}>
-              <Icon name="location_on" filled size={40}
-                style={{ color: mapPicker === 'pickup' ? '#10B981' : '#3B82F6', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }} />
-            </div>
-
-            {/* GPS locate button */}
-            <button onClick={() => {
-              if (!navigator.geolocation) return;
-              navigator.geolocation.getCurrentPosition(
-                pos => {
-                  handleMapSelect(pos.coords.latitude, pos.coords.longitude);
-                },
-                () => {},
-                { enableHighAccuracy: true, timeout: 10000 }
-              );
-            }}
-              style={{
-                position: 'absolute', bottom: 16, left: 16, zIndex: 10000,
-                padding: '10px 16px', borderRadius: 12, border: 'none', cursor: 'pointer',
-                background: isDark ? '#18181BEE' : '#FFFFFFEE', backdropFilter: 'blur(8px)',
-                boxShadow: isDark ? '0 2px 12px rgba(0,0,0,0.5)' : '0 2px 10px rgba(0,0,0,0.15)',
-                display: 'flex', alignItems: 'center', gap: 6,
-                fontSize: 12, fontWeight: 700, color: '#4285F4',
-              }}>
-              <Icon name="my_location" size={16} /> Use My Location
-            </button>
-
-            {/* Google Maps button */}
-            <button onClick={() => {
-              const lat = mapPickerCenter[0];
-              const lng = mapPickerCenter[1];
-              window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
-            }}
-              style={{
-                position: 'absolute', bottom: 16, right: 16, zIndex: 10000,
-                padding: '10px 16px', borderRadius: 12, border: 'none', cursor: 'pointer',
-                background: isDark ? '#18181BEE' : '#FFFFFFEE', backdropFilter: 'blur(8px)',
-                boxShadow: isDark ? '0 2px 12px rgba(0,0,0,0.5)' : '0 2px 10px rgba(0,0,0,0.15)',
-                display: 'flex', alignItems: 'center', gap: 6,
-                fontSize: 12, fontWeight: 700, color: '#10B981',
-              }}>
-              <Icon name="map" size={16} /> Google Maps
-            </button>
-          </div>
-
-          {/* Bottom: Confirm */}
-          <div style={{ padding: '12px 16px', background: C.card, borderTop: `1px solid ${C.border}`, flexShrink: 0, zIndex: 10000 }}>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setMapPicker(null)}
-                style={{ padding: '13px 20px', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 600, background: 'transparent', border: `1px solid ${C.border}`, color: C.sub }}>
-                Cancel
-              </button>
-              <button onClick={() => {
-                handleMapSelect(mapPickerCenter[0], mapPickerCenter[1]);
-              }}
-                style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: mapPicker === 'pickup' ? '#10B981' : '#3B82F6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <Icon name="check" size={18} />
-                Set {mapPicker === 'pickup' ? 'Pickup' : 'Drop-off'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* ── Map Picker Modal ── */}
       {mapPicker && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
           <div style={{ position: 'absolute', top: 20, left: 16, right: 16, zIndex: 501, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ background: C.card, padding: '8px 16px', borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${C.border}` }}>
               <div style={{ width: 10, height: 10, borderRadius: 5, background: mapPicker === 'pickup' ? '#10B981' : '#3B82F6' }} />
@@ -537,23 +423,26 @@ export default function HomeBooking() {
               center={mapPickerCenter}
               zoom={16} // High zoom for precision
               showLocate={true}
-              onMove={(e) => {
-                // Leaflet handles move natively, we just use a fixed crosshair overlay
-              }}
               mapRef={mapRef}
-            >
-              {/* Optional: Add custom TileLayer for higher accuracy if needed */}
-            </MapView>
+              className="w-full h-full"
+            />
 
             {/* Fixed Crosshair / Center Pin */}
             <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -100%)', zIndex: 502, pointerEvents: 'none' }}>
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ width: 32, height: 42, background: 'url("https://maps.google.com/mapfiles/ms/icons/red-pushpin.png") center bottom no-repeat', backgroundSize: 'contain' }} />
+                <Icon name="location_on" filled size={48} style={{ color: mapPicker === 'pickup' ? '#10B981' : '#3B82F6', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }} />
               </div>
             </div>
             
             <div style={{ position: 'absolute', bottom: 30, left: 24, right: 24, zIndex: 502 }}>
-              <button onClick={handleMapConfirm}
+              <button 
+                onClick={async () => {
+                  const center = mapRef.current?.getCenter();
+                  if (center) {
+                    await handleSetLocation(center.lat, center.lng, mapPicker);
+                  }
+                  setMapPicker(null);
+                }}
                 style={{ width: '100%', padding: '16px 0', borderRadius: 14, background: '#000', color: '#FFD700', fontSize: 16, fontWeight: 800, border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.4)', letterSpacing: '0.05em' }}>
                 Confirm Location
               </button>

@@ -52,15 +52,21 @@ function base64urlToBuffer(base64url) {
 }
 
 // Register biometric credential after first login
-// Stores the login data encrypted so we can auto-login later
 export async function registerBiometric(userId, role) {
   if (!isBiometricAvailable()) throw new Error('Biometric not supported');
 
-  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  // 1. Get challenge from server
+  const cRes = await fetch('/api/auth/biometric/register-challenge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, role })
+  });
+  const { challenge: serverChallenge } = await cRes.json();
 
+  // 2. Trigger browser fingerprint creation
   const credential = await navigator.credentials.create({
     publicKey: {
-      challenge,
+      challenge: base64urlToBuffer(serverChallenge),
       rp: { name: 'MiniTruK', id: window.location.hostname },
       user: {
         id: new TextEncoder().encode(userId),
@@ -83,10 +89,18 @@ export async function registerBiometric(userId, role) {
 
   const credentialId = bufferToBase64url(credential.rawId);
 
-  // Store credential info and user data locally
+  // 3. Register with backend
+  const regRes = await fetch('/api/auth/biometric/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, role, credentialId })
+  });
+  if (!regRes.ok) throw new Error('Failed to register biometric on server');
+
+  // Store credential info locally for UI state
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ userId, role, credentialId, enabledAt: Date.now() }));
 
-  // Also store the login data so biometric can auto-login
+  // Also store the login data as local backup
   const authData = localStorage.getItem('minitruck_auth');
   if (authData) {
     localStorage.setItem(CRED_KEY, authData);
@@ -95,17 +109,24 @@ export async function registerBiometric(userId, role) {
   return true;
 }
 
-// Authenticate using biometric — verifies fingerprint then returns stored login data
+// Authenticate using biometric — verifies fingerprint then returns login data from server
 export async function authenticateWithBiometric() {
   const stored = hasBiometricCredential();
   if (!stored) throw new Error('No biometric credential found');
 
-  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  // 1. Get challenge from server
+  const cRes = await fetch('/api/auth/biometric/auth-challenge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: stored.userId, role: stored.role })
+  });
+  if (!cRes.ok) throw new Error('Biometric login not available for this user');
+  const { challenge: serverChallenge } = await cRes.json();
 
-  // Trigger fingerprint/face verification
+  // 2. Trigger fingerprint verification UI
   await navigator.credentials.get({
     publicKey: {
-      challenge,
+      challenge: base64urlToBuffer(serverChallenge),
       rpId: window.location.hostname,
       allowCredentials: [{
         id: base64urlToBuffer(stored.credentialId),
@@ -117,20 +138,14 @@ export async function authenticateWithBiometric() {
     }
   });
 
-  // Biometric passed — get stored login data
-  const savedAuth = localStorage.getItem(CRED_KEY);
-  if (!savedAuth) {
-    // No saved auth — do a server login with stored userId
-    const res = await fetch('/api/auth/biometric-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: stored.userId, role: stored.role })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Login failed');
-    return data;
-  }
-
-  const authData = JSON.parse(savedAuth);
-  return { token: authData.token, user: authData.user, role: authData.role };
+  // 3. Verify with backend to get a fresh token
+  const res = await fetch('/api/auth/biometric/authenticate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: stored.userId, role: stored.role, credentialId: stored.credentialId })
+  });
+  
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Login failed');
+  return data;
 }
