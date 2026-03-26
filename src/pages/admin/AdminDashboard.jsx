@@ -31,6 +31,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const [bookings, setBookings] = useState([]);
   const [driversList, setDriversList] = useState([]);
   const [trucksList, setTrucksList] = useState([]);
@@ -326,7 +327,7 @@ export default function AdminDashboard() {
 
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}>
-            {activeTab === 'overview' && <OverviewTab {...tabData.overview} C={C} isDark={isDark} mob={mob} />}
+            {activeTab === 'overview' && <OverviewTab {...tabData.overview} C={C} isDark={isDark} mob={mob} showMap={showMap} setShowMap={setShowMap} />}
             {activeTab === 'rides' && <RidesTab {...tabData.rides} C={C} isDark={isDark} mob={mob} />}
             {activeTab === 'drivers' && <DriversTab {...tabData.drivers} C={C} isDark={isDark} mob={mob} />}
             {activeTab === 'trucks' && <TrucksTab {...tabData.trucks} C={C} isDark={isDark} mob={mob} />}
@@ -367,10 +368,8 @@ function TD({ children, bold, accent, align, C }) {
 }
 
 /* ═══ Overview ═══ */
-function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetData, users, totalRevenue, activeRides, completedRides, activeDrivers, C, isDark, mob }) {
+function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetData, users, totalRevenue, activeRides, completedRides, activeDrivers, C, isDark, mob, showMap, setShowMap }) {
   const [selectedDriver, setSelectedDriver] = useState(null);
-  const [showMap, setShowMap] = useState(false);
-
   // Get bookings for selected driver
   const driverBookings = selectedDriver ? bookings.filter(b => b.driverId === selectedDriver.id) : [];
   // Build route markers for selected driver
