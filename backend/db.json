@@ -1,42 +1,42 @@
 {
   "users": [
     {
-      "id": "u01",
-      "name": "Industrial Corp A",
-      "email": "user@demo.com",
-      "password": "pass123",
+      "id": "u101",
+      "name": "Rajesh Kumar",
+      "email": "rajesh@demo.com",
+      "password": "1234",
       "role": "customer",
-      "phone": "+1-555-0101",
+      "phone": "9876543210",
       "bookings": 42,
       "standing": "Elite",
-      "address": "123 Industrial Ave, Chicago",
+      "address": "123 MG Road, Mumbai",
       "preferences": {
         "notifications": true,
-        "defaultPayment": "wallet"
+        "defaultPayment": "upi"
       }
     },
     {
-      "id": "u02",
-      "name": "Logistics Hub B",
-      "email": "hub@demo.com",
-      "password": "pass123",
+      "id": "u102",
+      "name": "Priya Sharma",
+      "email": "priya@demo.com",
+      "password": "1234",
       "role": "customer",
-      "phone": "+1-555-0102",
+      "phone": "9876543211",
       "bookings": 12,
       "standing": "Standard",
-      "address": "456 Commerce St, Detroit",
+      "address": "456 Anna Nagar, Chennai",
       "preferences": {
         "notifications": true,
-        "defaultPayment": "card"
+        "defaultPayment": "cash"
       }
     }
   ],
   "drivers": [
     {
-      "id": "8829",
-      "name": "Elias Vance",
+      "id": "D8829",
+      "name": "Ravi Shankar",
       "password": "1234",
-      "phone": "+1-555-8829",
+      "phone": "9988776655",
       "status": "offline",
       "available": false,
       "earnings": 4829.5,
@@ -68,10 +68,10 @@
       }
     },
     {
-      "id": "8841",
-      "name": "Elena Rossi",
+      "id": "D8841",
+      "name": "Amit Patel",
       "password": "1234",
-      "phone": "+1-555-8841",
+      "phone": "9988776644",
       "status": "on-trip",
       "available": true,
       "earnings": 2140,
@@ -103,10 +103,10 @@
       }
     },
     {
-      "id": "8902",
-      "name": "David Chen",
+      "id": "D8902",
+      "name": "Suresh Reddy",
       "password": "1234",
-      "phone": "+1-555-8902",
+      "phone": "9988776633",
       "status": "active",
       "available": true,
       "earnings": 3210,
@@ -138,10 +138,10 @@
       }
     },
     {
-      "id": "8810",
-      "name": "Sarah Jenkins",
+      "id": "D8810",
+      "name": "Deepa Nair",
       "password": "1234",
-      "phone": "+1-555-8810",
+      "phone": "9988776622",
       "status": "offline",
       "available": false,
       "earnings": 1890,
@@ -175,9 +175,9 @@
   ],
   "admins": [
     {
-      "id": "admin_01",
-      "name": "System Admin",
-      "password": "8829",
+      "id": "admin",
+      "name": "Admin",
+      "password": "1234",
       "role": "admin"
     }
   ],
@@ -213,8 +213,8 @@
   "bookings": [
     {
       "id": "MH-9921-X",
-      "userId": "u01",
-      "driverId": "8829",
+      "userId": "u101",
+      "driverId": "D8829",
       "truckType": "large",
       "pickup": {
         "address": "Houston Hub",
@@ -253,8 +253,8 @@
     },
     {
       "id": "MH-4402-B",
-      "userId": "u01",
-      "driverId": "8841",
+      "userId": "u101",
+      "driverId": "D8841",
       "truckType": "medium",
       "pickup": {
         "address": "Chicago Depot",
@@ -293,8 +293,8 @@
     },
     {
       "id": "MH-1102-Z",
-      "userId": "u02",
-      "driverId": "8829",
+      "userId": "u102",
+      "driverId": "D8829",
       "truckType": "medium",
       "pickup": {
         "address": "Seattle Terminal",
@@ -333,8 +333,8 @@
     },
     {
       "id": "MH-7733-A",
-      "userId": "u02",
-      "driverId": "8902",
+      "userId": "u102",
+      "driverId": "D8902",
       "truckType": "small",
       "pickup": {
         "address": "Miami Depot",
@@ -373,8 +373,8 @@
     },
     {
       "id": "MH-5501-C",
-      "userId": "u01",
-      "driverId": "8902",
+      "userId": "u101",
+      "driverId": "D8902",
       "truckType": "large",
       "pickup": {
         "address": "LA Freight Yard",
@@ -415,7 +415,7 @@
   "earnings": [
     {
       "id": "e01",
-      "driverId": "8829",
+      "driverId": "D8829",
       "bookingId": "MH-9921-X",
       "date": "2023-10-24",
       "route": {
@@ -429,7 +429,7 @@
     },
     {
       "id": "e02",
-      "driverId": "8829",
+      "driverId": "D8829",
       "bookingId": "MH-1102-Z",
       "date": "2023-10-18",
       "route": {
@@ -443,7 +443,7 @@
     },
     {
       "id": "e03",
-      "driverId": "8841",
+      "driverId": "D8841",
       "bookingId": "MH-4402-B",
       "date": "2023-10-23",
       "route": {
@@ -457,7 +457,7 @@
     },
     {
       "id": "e04",
-      "driverId": "8829",
+      "driverId": "D8829",
       "bookingId": "MH-5501-C",
       "date": "2023-10-23",
       "route": {
@@ -471,7 +471,7 @@
     },
     {
       "id": "e05",
-      "driverId": "8829",
+      "driverId": "D8829",
       "bookingId": "MH-5501-C",
       "date": "2023-10-23",
       "route": {
@@ -488,7 +488,7 @@
     {
       "id": "TRK-202",
       "type": "medium",
-      "driverId": "8829",
+      "driverId": "D8829",
       "status": "active",
       "location": {
         "lat": 41.8781,
@@ -506,7 +506,7 @@
     {
       "id": "TRK-102",
       "type": "medium",
-      "driverId": "8841",
+      "driverId": "D8841",
       "status": "on-trip",
       "location": {
         "lat": 41.9028,
@@ -518,7 +518,7 @@
     {
       "id": "TRK-221",
       "type": "large",
-      "driverId": "8902",
+      "driverId": "D8902",
       "status": "active",
       "location": {
         "lat": 41.85,
@@ -530,7 +530,7 @@
     {
       "id": "TRK-404",
       "type": "small",
-      "driverId": "8810",
+      "driverId": "D8810",
       "status": "idle",
       "location": {
         "lat": 41.87,
@@ -556,7 +556,7 @@
     {
       "id": "p01",
       "bookingId": "MH-9921-X",
-      "userId": "u01",
+      "userId": "u101",
       "amount": 2235.2,
       "method": "wallet",
       "status": "completed",
@@ -566,7 +566,7 @@
     {
       "id": "p02",
       "bookingId": "MH-4402-B",
-      "userId": "u01",
+      "userId": "u101",
       "amount": 1079.8,
       "method": "card",
       "status": "completed",
@@ -576,7 +576,7 @@
     {
       "id": "p03",
       "bookingId": "MH-1102-Z",
-      "userId": "u02",
+      "userId": "u102",
       "amount": 824.8,
       "method": "upi",
       "status": "completed",
@@ -586,7 +586,7 @@
   ],
   "wallet": [
     {
-      "userId": "u01",
+      "userId": "u101",
       "balance": 2764.8,
       "transactions": [
         {
@@ -606,7 +606,7 @@
       ]
     },
     {
-      "userId": "u02",
+      "userId": "u102",
       "balance": 2175.2,
       "transactions": [
         {
@@ -629,8 +629,8 @@
   "ratings": [
     {
       "id": "r01",
-      "userId": "u01",
-      "driverId": "8829",
+      "userId": "u101",
+      "driverId": "D8829",
       "bookingId": "MH-1102-Z",
       "rating": 5,
       "comment": "Excellent service, very professional",
@@ -638,8 +638,8 @@
     },
     {
       "id": "r02",
-      "userId": "u02",
-      "driverId": "8902",
+      "userId": "u102",
+      "driverId": "D8902",
       "bookingId": "MH-5501-C",
       "rating": 4,
       "comment": "Good delivery, slightly late",
@@ -647,8 +647,8 @@
     },
     {
       "id": "r03",
-      "userId": "u01",
-      "driverId": "8841",
+      "userId": "u101",
+      "driverId": "D8841",
       "bookingId": "MH-4402-B",
       "rating": 5,
       "comment": "Handled fragile items with care",
@@ -658,7 +658,7 @@
   "supportTickets": [
     {
       "id": "st01",
-      "userId": "u01",
+      "userId": "u101",
       "subject": "Delivery delay inquiry",
       "category": "delivery",
       "status": "resolved",
@@ -678,7 +678,7 @@
     },
     {
       "id": "st02",
-      "userId": "u02",
+      "userId": "u102",
       "subject": "Refund request for cancelled order",
       "category": "payment",
       "status": "open",
@@ -694,16 +694,28 @@
   ],
   "commission": {
     "rate": 15,
-    "minimumFare": 20,
+    "minimumFare": 50,
     "peakHourMultiplier": 1.3,
-    "peakHours": [
-      8,
-      9,
-      17,
-      18,
-      19
-    ],
+    "peakHours": [8, 9, 17, 18, 19],
     "surgeEnabled": true,
     "surgeMultiplier": 1.5
+  },
+  "handlingCharges": {
+    "standard": 0,
+    "fragile": 50,
+    "hazmat": 120,
+    "temperature": 80,
+    "oversized": 100
+  },
+  "weightCharges": {
+    "below500": 0,
+    "above500": 30,
+    "above2000": 80,
+    "above5000": 150
+  },
+  "priorityMultipliers": {
+    "standard": 1.0,
+    "express": 1.5,
+    "urgent": 2.2
   }
 }

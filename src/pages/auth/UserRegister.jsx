@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import Icon from '../../components/ui/Icon';
-import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../../config/firebase';
+// import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../../config/firebase';
+import { sendMockOtp } from '../../config/otpMock';
 
 export default function UserRegister() {
   const { isDark } = useTheme();
@@ -155,38 +156,14 @@ export default function UserRegister() {
     setOtpSending(true);
     setOtpError('');
     try {
-      if (recaptchaRef.current) {
-        try { recaptchaRef.current.clear(); } catch {}
-        recaptchaRef.current = null;
-      }
-      const container = document.getElementById('recaptcha-container-user');
-      if (container) container.innerHTML = '';
-
-      const verifier = new RecaptchaVerifier(auth, 'recaptcha-container-user', {
-        size: 'invisible',
-        callback: () => {},
-      });
-      recaptchaRef.current = verifier;
-
-      const result = await signInWithPhoneNumber(auth, formattedPhone, verifier);
+      const result = await sendMockOtp(formattedPhone);
       setConfirmationResult(result);
       setOtpSent(true);
       setOtpSending(false);
       setOtpTimer(60);
     } catch (err) {
       setOtpSending(false);
-      console.error('Firebase OTP Error:', err);
-      if (recaptchaRef.current) { try { recaptchaRef.current.clear(); } catch {} recaptchaRef.current = null; }
-      const container = document.getElementById('recaptcha-container-user');
-      if (container) container.innerHTML = '';
-
-      if (err.code === 'auth/invalid-phone-number') setOtpError('Invalid phone number. Enter 10 digits.');
-      else if (err.code === 'auth/too-many-requests') setOtpError('Too many attempts. Try again later.');
-      else if (err.code === 'auth/captcha-check-failed') setOtpError('Verification failed. Refresh the page and try again.');
-      else if (err.code === 'auth/network-request-failed') setOtpError('Network error. Check your internet connection.');
-      else if (err.code === 'auth/quota-exceeded') setOtpError('SMS quota exceeded. Try again tomorrow.');
-      else if (err.code === 'auth/missing-phone-number') setOtpError('Phone number is required.');
-      else setOtpError(`Error: ${err.code || err.message || 'Failed to send OTP'}`);
+      setOtpError(err.message || 'Failed to send OTP');
     }
   };
 

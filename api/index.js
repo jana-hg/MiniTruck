@@ -210,7 +210,7 @@ app.post('/api/auth/login', async (req, res) => {
   if (!id || !password || !role) return res.status(400).json({ error: 'id, password and role are required' });
   const db = readDB();
   let user = null;
-  if (role === 'customer') user = db.users.find(u => u.id === id || u.email === id);
+  if (role === 'customer') user = db.users.find(u => u.id === id || u.email === id || u.phone === id || u.phone === `+91${id}`);
   else if (role === 'driver') user = db.drivers.find(d => d.id === id);
   else if (role === 'admin') user = db.admins.find(a => a.id === id || a.name === id);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
@@ -225,6 +225,105 @@ app.post('/api/auth/login', async (req, res) => {
   const token = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: '8h' });
   const { password: _, ...safeUser } = user;
   return res.json({ token, user: safeUser, role });
+});
+
+// Helper: find user by phone
+function findUserByPhone(db, phone, role) {
+  const clean = phone.replace(/\D/g, '');
+  if (role === 'driver') return { user: db.drivers.find(d => d.phone?.replace(/\D/g, '') === clean), collection: 'drivers' };
+  return { user: db.users.find(u => u.phone?.replace(/\D/g, '') === clean || u.phone === `+91${clean}`), collection: 'users' };
+}
+
+// Issue OTP-verified token after Firebase OTP confirmation
+app.post('/api/auth/verify-otp-token', (req, res) => {
+  const { phone, role } = req.body;
+  if (!phone || !role) return res.status(400).json({ error: 'Phone and role required' });
+  const db = readDB();
+  const { user } = findUserByPhone(db, phone, role);
+  if (!user) return res.status(404).json({ error: 'No account found.' });
+  const verifyToken = jwt.sign({ phone: phone.replace(/\D/g, ''), role, purpose: 'otp-verified' }, JWT_SECRET, { expiresIn: '10m' });
+  return res.json({ verifyToken, userId: user.id });
+});
+
+// OTP-verified login (requires verifyToken)
+app.post('/api/auth/login-otp', (req, res) => {
+  const { phone, role, verifyToken } = req.body;
+  if (!phone || !role || !verifyToken) return res.status(400).json({ error: 'Phone, role, and verifyToken required' });
+  try {
+    const decoded = jwt.verify(verifyToken, JWT_SECRET);
+    if (decoded.purpose !== 'otp-verified' || decoded.phone !== phone.replace(/\D/g, '') || decoded.role !== role)
+      return res.status(401).json({ error: 'Invalid verification.' });
+  } catch { return res.status(401).json({ error: 'Verification expired.' }); }
+  const db = readDB();
+  const { user } = findUserByPhone(db, phone, role);
+  if (!user) return res.status(404).json({ error: 'No account found.' });
+  const token = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: '8h' });
+  const { password: _, ...safeUser } = user;
+  return res.json({ token, user: safeUser, role });
+});
+
+// Biometric login
+app.post('/api/auth/biometric-login', (req, res) => {
+  const { userId, role, bioToken } = req.body;
+  if (!userId || !role) return res.status(400).json({ error: 'userId and role required' });
+  if (bioToken) { try { const d = jwt.verify(bioToken, JWT_SECRET); if (d.id !== userId || d.purpose !== 'biometric') return res.status(401).json({ error: 'Invalid' }); } catch { return res.status(401).json({ error: 'Expired' }); } }
+  const db = readDB();
+  let user = null;
+  if (role === 'customer') user = db.users.find(u => u.id === userId);
+  else if (role === 'driver') user = db.drivers.find(d => d.id === userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const token = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: '8h' });
+  const { password: _, ...safeUser } = user;
+  return res.json({ token, user: safeUser, role });
+});
+
+// Lookup phone (rate limited, minimal info)
+app.post('/api/auth/lookup-phone', (req, res) => {
+  const { phone, role } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Phone required' });
+  const db = readDB();
+  const { user } = findUserByPhone(db, phone, role || 'customer');
+  if (!user) return res.status(404).json({ error: 'No account found' });
+  return res.json({ userId: user.id });
+});
+
+// Reset password (requires verifyToken)
+app.post('/api/auth/reset-password', (req, res) => {
+  const { phone, newPassword, role, verifyToken } = req.body;
+  if (!phone || !newPassword || !verifyToken) return res.status(400).json({ error: 'All fields required' });
+  if (!/^\d{4}$/.test(newPassword)) return res.status(400).json({ error: 'Password must be 4 digits' });
+  try {
+    const decoded = jwt.verify(verifyToken, JWT_SECRET);
+    if (decoded.purpose !== 'otp-verified' || decoded.phone !== phone.replace(/\D/g, '') || decoded.role !== role)
+      return res.status(401).json({ error: 'Invalid verification.' });
+  } catch { return res.status(401).json({ error: 'Verification expired.' }); }
+  const db = readDB();
+  const collection = role === 'driver' ? 'drivers' : 'users';
+  const cleanPhone = phone.replace(/\D/g, '');
+  const idx = db[collection].findIndex(u => u.phone?.replace(/\D/g, '') === cleanPhone || u.phone === `+91${cleanPhone}`);
+  if (idx === -1) return res.status(404).json({ error: 'No account found' });
+  db[collection][idx].password = newPassword;
+  db[collection][idx].mustChangePassword = false;
+  writeDB(db);
+  return res.json({ success: true });
+});
+
+// Change password (requires old password)
+app.post('/api/auth/change-password', (req, res) => {
+  const { id, oldPassword, newPassword, role } = req.body;
+  if (!id || !oldPassword || !newPassword) return res.status(400).json({ error: 'All fields required' });
+  if (!/^\d{4}$/.test(newPassword)) return res.status(400).json({ error: 'Password must be 4 digits' });
+  const db = readDB();
+  const collection = role === 'driver' ? 'drivers' : 'users';
+  const idx = db[collection].findIndex(u => u.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'User not found' });
+  const stored = db[collection][idx].password;
+  const valid = stored.startsWith('$2') ? false : stored === oldPassword;
+  if (!valid) return res.status(401).json({ error: 'Old password incorrect' });
+  db[collection][idx].password = newPassword;
+  db[collection][idx].mustChangePassword = false;
+  writeDB(db);
+  return res.json({ success: true });
 });
 
 app.post('/api/auth/register', async (req, res) => {
@@ -258,10 +357,12 @@ app.post('/api/users/register', (req, res) => {
   const { fullName, phone, email, profilePicture } = req.body;
   if (!fullName || !phone) return res.status(400).json({ error: 'Name and phone are required' });
 
-  const exists = db.users.find(u => u.phone === phone);
-  if (exists) return res.status(409).json({ error: 'User with this phone already exists' });
+  const cleanPhone = phone.replace(/\D/g, '');
+  const exists = db.users.find(u => u.phone?.replace(/\D/g, '') === cleanPhone);
+  if (exists) return res.status(409).json({ error: 'An account with this phone number already exists. Please login or use forgot password.' });
 
-  const id = 'u' + String(Math.floor(100 + Math.random() * 900));
+  let id;
+  do { id = 'u' + String(Math.floor(100 + Math.random() * 900)); } while (db.users.find(u => u.id === id));
   const newUser = {
     id,
     name: fullName,
@@ -450,15 +551,19 @@ app.get('/api/drivers', (req, res) => {
 // Driver self-registration (application)
 app.post('/api/drivers/register', (req, res) => {
   const db = readDB();
-  const { name, phone, city, vehicleType, vehicleModel, vehicleRegNumber, vehicleYear, licenseNumber, licenseExpiry, profilePicture, vehiclePicture } = req.body;
+  const { name, phone, city, vehicleType, vehicleModel, vehicleMake, vehicleRegNumber, vehicleYear, licenseNumber, licenseExpiry, password: userPassword, profilePicture, vehiclePicture, uploadedDocuments } = req.body;
   if (!name || !phone || !licenseNumber) return res.status(400).json({ error: 'Name, phone, and license number are required' });
 
-  const exists = db.drivers.find(d => d.phone === phone || d.licenseNumber === licenseNumber);
-  if (exists) return res.status(409).json({ error: 'Driver with this phone or license already exists' });
+  const cleanPhone = phone.replace(/\D/g, '');
+  const phoneExists = db.drivers.find(d => d.phone?.replace(/\D/g, '') === cleanPhone);
+  if (phoneExists) return res.status(409).json({ error: 'A driver account with this phone number already exists. Please login or use forgot password.' });
+  const licenseExists = db.drivers.find(d => d.licenseNumber && d.licenseNumber === licenseNumber);
+  if (licenseExists) return res.status(409).json({ error: 'A driver with this license number already exists.' });
 
-  const id = 'D' + String(Math.floor(1000 + Math.random() * 9000));
+  let id;
+  do { id = 'D' + String(Math.floor(1000 + Math.random() * 9000)); } while (db.drivers.find(d => d.id === id));
   const newDriver = {
-    id, name, password: '1234', phone, city: city || '',
+    id, name, password: userPassword || '1234', mustChangePassword: !userPassword, phone, city: city || '',
     status: 'pending-approval',
     available: false,
     approved: false,
@@ -470,9 +575,11 @@ app.post('/api/drivers/register', (req, res) => {
     licenseExpiry: licenseExpiry || '',
     profilePicture: profilePicture || null,
     vehiclePicture: vehiclePicture || null,
+    uploadedDocuments: uploadedDocuments || null,
     documents: { license: 'pending', insurance: 'pending', registration: 'pending' },
     vehicleDetails: {
       type: vehicleType || 'small',
+      make: vehicleMake || '',
       model: vehicleModel || '',
       regNumber: vehicleRegNumber || '',
       year: vehicleYear || 2024,
@@ -838,23 +945,49 @@ app.get('/api/invoices/:bookingId', (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 //  DYNAMIC PRICING
 // ═══════════════════════════════════════════════════════════════
+// Get all pricing config (for frontend)
+app.get('/api/pricing/config', (req, res) => {
+  const db = readDB();
+  res.json({
+    trucks: db.trucks,
+    handlingCharges: db.handlingCharges || { standard: 0, fragile: 50, hazmat: 120, temperature: 80, oversized: 100 },
+    weightCharges: db.weightCharges || { below500: 0, above500: 30, above2000: 80, above5000: 150 },
+    priorityMultipliers: db.priorityMultipliers || { standard: 1.0, express: 1.5, urgent: 2.2 },
+    commission: { minimumFare: db.commission?.minimumFare || 50, surgeEnabled: db.commission?.surgeEnabled, surgeMultiplier: db.commission?.surgeMultiplier, peakHours: db.commission?.peakHours },
+  });
+});
+
+// Update pricing config (admin)
+app.post('/api/pricing/config', (req, res) => {
+  const db = readDB();
+  const { trucks, handlingCharges, weightCharges, priorityMultipliers, commission } = req.body;
+  if (trucks) trucks.forEach(t => { const existing = db.trucks.find(tr => tr.id === t.id); if (existing) { existing.price = t.price; existing.kmCharge = t.kmCharge; } });
+  if (handlingCharges) db.handlingCharges = handlingCharges;
+  if (weightCharges) db.weightCharges = weightCharges;
+  if (priorityMultipliers) db.priorityMultipliers = priorityMultipliers;
+  if (commission) db.commission = { ...db.commission, ...commission };
+  writeDB(db);
+  res.json({ success: true });
+});
+
 app.post('/api/pricing/estimate', (req, res) => {
   const db = readDB();
   const { truckType, distanceKm, loadType, weight, priority, discountCode } = req.body;
   const truck = db.trucks.find(t => t.id === truckType) || db.trucks[0];
   const commission = db.commission;
+  const hCharges = db.handlingCharges || {};
+  const wCharges = db.weightCharges || {};
+  const pMultipliers = db.priorityMultipliers || {};
 
   const baseFare = truck.price;
   const distanceCharge = (distanceKm || 0) * truck.kmCharge;
 
   const w = parseFloat(weight) || 0;
-  const weightSurcharge = w > 5000 ? 150 : w > 2000 ? 80 : w > 500 ? 30 : 0;
+  const weightSurcharge = w > 5000 ? (wCharges.above5000 || 150) : w > 2000 ? (wCharges.above2000 || 80) : w > 500 ? (wCharges.above500 || 30) : (wCharges.below500 || 0);
 
-  const handlingMap = { fragile: 50, hazmat: 120, temperature: 80, oversized: 100 };
-  const handlingSurcharge = handlingMap[loadType?.toLowerCase()] || 0;
+  const handlingSurcharge = hCharges[loadType?.toLowerCase()] || 0;
 
-  const priorityMap = { standard: 1.0, express: 1.5, urgent: 2.2 };
-  const priorityMultiplier = priorityMap[priority] || 1.0;
+  const priorityMultiplier = pMultipliers[priority] || 1.0;
 
   const hour = new Date().getHours();
   const surgeMultiplier = (commission.surgeEnabled && commission.peakHours.includes(hour)) ? commission.surgeMultiplier : 1.0;
@@ -875,7 +1008,7 @@ app.post('/api/pricing/estimate', (req, res) => {
     discount: parseFloat(discount.toFixed(2)), discountApplied,
     subtotal: parseFloat(subtotal.toFixed(2)),
     total: parseFloat(total.toFixed(2)),
-    currency: 'USD'
+    currency: 'INR'
   });
 });
 

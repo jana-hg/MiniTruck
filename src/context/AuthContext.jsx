@@ -4,12 +4,12 @@ const AuthContext = createContext(null);
 
 function getStoredAuth() {
   try {
-    const stored = sessionStorage.getItem('minitruck_auth');
+    const stored = localStorage.getItem('minitruck_auth');
     if (stored) {
       const data = JSON.parse(stored);
-      // Check if session is expired (8 hours)
-      if (Date.now() - data.loggedInAt > 8 * 60 * 60 * 1000) {
-        sessionStorage.removeItem('minitruck_auth');
+      // Check if session is expired (30 days)
+      if (Date.now() - data.loggedInAt > 30 * 24 * 60 * 60 * 1000) {
+        localStorage.removeItem('minitruck_auth');
         return null;
       }
       return data;
@@ -23,13 +23,24 @@ export function AuthProvider({ children }) {
 
   const login = useCallback((user, role, token) => {
     const data = { user, role, token, loggedInAt: Date.now() };
-    sessionStorage.setItem('minitruck_auth', JSON.stringify(data));
+    localStorage.setItem('minitruck_auth', JSON.stringify(data));
     setAuth(data);
   }, []);
 
   const logout = useCallback(() => {
-    sessionStorage.removeItem('minitruck_auth');
+    localStorage.removeItem('minitruck_auth');
+    localStorage.removeItem('minitruck_biometric');
+    localStorage.removeItem('minitruck_bio_cred');
     setAuth(null);
+  }, []);
+
+  const updateUser = useCallback((updates) => {
+    setAuth(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, user: { ...prev.user, ...updates } };
+      localStorage.setItem('minitruck_auth', JSON.stringify(updated));
+      return updated;
+    });
   }, []);
 
   const value = useMemo(() => ({
@@ -39,7 +50,8 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!auth,
     login,
     logout,
-  }), [auth, login, logout]);
+    updateUser,
+  }), [auth, login, logout, updateUser]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -1,9 +1,9 @@
 export const API_BASE = '/api';
 
 export const MOCK_CREDENTIALS = {
-  customer: { id: 'u01', password: 'pass123' },
-  driver: { id: '8829', password: '1234' },
-  admin: { id: 'admin_01', password: '8829', otp: '000000' },
+  customer: { id: '9876543210', password: '1234' },
+  driver: { id: 'D8829', password: '1234' },
+  admin: { id: 'admin', password: '1234', otp: '000000' },
 };
 
 export const TRUCK_TYPES = [

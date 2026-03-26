@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -6,10 +6,24 @@ import Icon from '../ui/Icon';
 import AppIcon from '../ui/AppIcon';
 
 export default function Header() {
-  const { isAuthenticated, role, user, logout } = useAuth();
+  const { isAuthenticated, role, user, logout, updateUser } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profilePic, setProfilePic] = useState(null);
+
+  // Fetch fresh profile data to sync name + picture
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+    const endpoint = role === 'driver' ? `/api/drivers/${user.id}` : role === 'customer' ? `/api/users/${user.id}` : null;
+    if (!endpoint) return;
+    fetch(endpoint).then(r => r.json()).then(data => {
+      if (data && !data.error) {
+        setProfilePic(data.profilePicture || null);
+        if (data.name && data.name !== user.name) updateUser({ name: data.name, profilePicture: data.profilePicture });
+      }
+    }).catch(() => {});
+  }, [isAuthenticated, user?.id, role, location.pathname]);
 
   const C = {
     bg: isDark ? '#0A0A0A' : '#FFFFFF',
@@ -67,13 +81,17 @@ export default function Header() {
               style={{
                 width: 36, height: 36, borderRadius: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: 'pointer', border: menuOpen ? `2px solid ${C.accent}` : `2px solid transparent`,
-                background: isDark ? 'linear-gradient(135deg, #FFD700, #FF8C00)' : 'linear-gradient(135deg, #3B82F6, #6366F1)',
+                background: profilePic ? 'none' : (isDark ? 'linear-gradient(135deg, #FFD700, #FF8C00)' : 'linear-gradient(135deg, #3B82F6, #6366F1)'),
                 color: isDark ? '#000' : '#fff', fontSize: 14, fontWeight: 800, letterSpacing: '-0.02em',
                 boxShadow: menuOpen ? `0 0 0 3px ${C.accent}30` : 'none',
                 transition: 'all 0.2s ease',
-                padding: 0,
+                padding: 0, overflow: 'hidden',
               }}>
-              {user?.name ? user.name.charAt(0).toUpperCase() : <Icon name="person" size={18} />}
+              {profilePic ? (
+                <img src={profilePic} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                user?.name ? user.name.charAt(0).toUpperCase() : <Icon name="person" size={18} />
+              )}
             </button>
           )}
 
@@ -104,9 +122,14 @@ export default function Header() {
             <div style={{ padding: '16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
                 width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: isDark ? 'linear-gradient(135deg,#FFD700,#FF8C00)' : 'linear-gradient(135deg,#3B82F6,#1D4ED8)',
+                background: profilePic ? 'none' : (isDark ? 'linear-gradient(135deg,#FFD700,#FF8C00)' : 'linear-gradient(135deg,#3B82F6,#1D4ED8)'),
+                overflow: 'hidden', flexShrink: 0,
               }}>
-                <Icon name="person" size={18} style={{ color: isDark ? '#000' : '#fff' }} />
+                {profilePic ? (
+                  <img src={profilePic} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <Icon name="person" size={18} style={{ color: isDark ? '#000' : '#fff' }} />
+                )}
               </div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{user?.name || user?.id}</div>

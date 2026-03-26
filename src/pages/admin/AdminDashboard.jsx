@@ -8,6 +8,7 @@ import AppIcon from '../../components/ui/AppIcon';
 import StatusBadge from '../../components/ui/StatusBadge';
 import MapView, { createFleetActiveIcon, createFleetIdleIcon } from '../../components/map/MapView';
 import { bookings as bookingsApi, drivers as driversApi, trucks as trucksApi, payments as paymentsApi, fleet as fleetApi } from '../../services/api';
+import { INDIAN_TRUCKS, ALL_TRUCK_MODELS } from '../../config/indianTrucks';
 
 function useIsMobile(bp = 768) {
   const [m, setM] = useState(window.innerWidth < bp);
@@ -19,7 +20,7 @@ const TABS = [
   { id: 'overview', icon: 'space_dashboard', label: 'Dashboard', color: '#3B82F6', dark: '#FFD700' },
   { id: 'rides', icon: 'route', label: 'Rides', color: '#8B5CF6', dark: '#A78BFA' },
   { id: 'drivers', icon: 'badge', label: 'Drivers', color: '#10B981', dark: '#34D399' },
-  { id: 'trucks', icon: 'local_shipping', label: 'Trucks', color: '#F59E0B', dark: '#FBBF24' },
+  { id: 'trucks', icon: 'local_shipping', label: 'Trucks & Pricing', color: '#F59E0B', dark: '#FBBF24' },
   { id: 'users', icon: 'group', label: 'Users', color: '#EC4899', dark: '#F472B6' },
   { id: 'payments', icon: 'account_balance_wallet', label: 'Payments', color: '#06B6D4', dark: '#22D3EE' },
 ];
@@ -40,19 +41,19 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
 
   useEffect(() => {
-    bookingsApi.getBookings({}).then(d => Array.isArray(d) && setBookings(d)).catch(() => {});
-    driversApi.getDrivers().then(d => Array.isArray(d) && setDriversList(d)).catch(() => {});
-    trucksApi.getTrucks().then(d => Array.isArray(d) && setTrucksList(d)).catch(() => {});
-    paymentsApi.getPayments().then(d => Array.isArray(d) && setPaymentsList(d)).catch(() => {});
-    fleetApi.getFleet().then(d => Array.isArray(d) && setFleetData(d)).catch(() => {});
-    fetch('/api/users').then(r => r.json()).then(d => Array.isArray(d) && setUsers(d)).catch(() => {});
+    bookingsApi.getBookings({}).then(d => Array.isArray(d) && setBookings(d)).catch(() => { });
+    driversApi.getDrivers().then(d => Array.isArray(d) && setDriversList(d)).catch(() => { });
+    trucksApi.getTrucks().then(d => Array.isArray(d) && setTrucksList(d)).catch(() => { });
+    paymentsApi.getPayments().then(d => Array.isArray(d) && setPaymentsList(d)).catch(() => { });
+    fleetApi.getFleet().then(d => Array.isArray(d) && setFleetData(d)).catch(() => { });
+    fetch('/api/users').then(r => r.json()).then(d => Array.isArray(d) && setUsers(d)).catch(() => { });
   }, []);
 
   // Poll fleet & driver locations every 10s for live map updates
   useEffect(() => {
     const interval = setInterval(() => {
-      fleetApi.getFleet().then(d => Array.isArray(d) && setFleetData(d)).catch(() => {});
-      driversApi.getDrivers().then(d => Array.isArray(d) && setDriversList(d)).catch(() => {});
+      fleetApi.getFleet().then(d => Array.isArray(d) && setFleetData(d)).catch(() => { });
+      driversApi.getDrivers().then(d => Array.isArray(d) && setDriversList(d)).catch(() => { });
     }, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -120,7 +121,7 @@ export default function AdminDashboard() {
         {/* Right: Fleet Map + Theme + Profile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Fleet Map Toggle */}
-          <button onClick={() => setShowMap(!showMap)} style={{
+          <button onClick={() => { const next = !showMap; setShowMap(next); if (next) setTimeout(() => document.getElementById('fleet-map-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); }} style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: mob ? '6px 8px' : '6px 12px', borderRadius: 8,
             background: showMap ? (isDark ? 'rgba(16,185,129,0.15)' : '#ECFDF5') : (isDark ? 'rgba(59,130,246,0.1)' : '#F0F9FF'),
             color: showMap ? '#10B981' : (isDark ? '#60A5FA' : '#3B82F6'),
@@ -496,57 +497,59 @@ function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetDat
       </Box>
 
       {/* Live Fleet Map */}
+      <div id="fleet-map-section" />
       <AnimatePresence>
         {showMap && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
-            <Box C={C} style={{ overflow: 'hidden', padding: 0 }}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} transition={{ duration: 0.3 }}>
+            <div style={{ borderRadius: mob ? 12 : 16, overflow: 'hidden', border: `1px solid ${isDark ? '#27272A' : '#E2E8F0'}`, background: isDark ? '#18181B' : '#fff', boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.08)' }}>
               {/* Map Header */}
-              <div style={{ padding: mob ? '12px 14px' : '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5' }}>
-                    <Icon name="satellite_alt" filled size={16} style={{ color: '#10B981' }} />
+              <div style={{ padding: mob ? '10px 12px' : '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: isDark ? 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.05))' : 'linear-gradient(135deg, #ECFDF5, #F0F9FF)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#10B981', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>
+                    <Icon name="satellite_alt" filled size={14} style={{ color: '#fff' }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
+                    <div style={{ fontSize: mob ? 12 : 13, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 6 }}>
                       {selectedDriver ? selectedDriver.name : 'Live Fleet Map'}
+                      <span style={{ width: 6, height: 6, borderRadius: 3, background: '#10B981', display: 'inline-block', animation: 'pulse 2s infinite' }} />
                     </div>
-                    <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
+                    <div style={{ fontSize: mob ? 9 : 10, color: C.muted, marginTop: 1 }}>
                       {selectedDriver ? `${driverBookings.length} active route(s)` : `${fleetData.filter(f => f.status === 'active' || f.status === 'on-trip').length} active · ${fleetData.length} total`}
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   {selectedDriver && (
                     <button onClick={() => setSelectedDriver(null)}
-                      style={{ fontSize: 10, fontWeight: 700, color: '#10B981', background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', border: `1px solid ${isDark ? 'rgba(16,185,129,0.2)' : '#A7F3D0'}`, cursor: 'pointer', padding: '5px 10px', borderRadius: 6 }}>
-                      All Drivers
+                      style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: '#10B981', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6 }}>
+                      All
                     </button>
                   )}
                   <button onClick={() => setShowMap(false)}
-                    style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1px solid ${C.border}`, background: 'transparent', color: C.muted }}>
-                    <Icon name="close" size={16} />
+                    style={{ width: 26, height: 26, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: 'none', background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: C.muted }}>
+                    <Icon name="close" size={14} />
                   </button>
                 </div>
               </div>
 
               {/* Selected driver info bar */}
               {selectedDriver && (
-                <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8, background: isDark ? 'rgba(255,215,0,0.04)' : '#FFFBEB', borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ width: 24, height: 24, borderRadius: 12, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name="person" filled size={12} style={{ color: isDark ? '#000' : '#fff' }} />
+                <div style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, background: isDark ? 'rgba(255,215,0,0.04)' : '#FFFBEB', borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 10, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="person" filled size={10} style={{ color: isDark ? '#000' : '#fff' }} />
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: C.text }}>{selectedDriver.name}</span>
-                  <span style={{ fontSize: 10, color: C.muted }}>·</span>
-                  <span style={{ fontSize: 10, color: C.muted }}>{selectedDriver.status}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: C.text }}>{selectedDriver.name}</span>
+                  <span style={{ fontSize: 9, color: C.muted }}>·</span>
+                  <span style={{ fontSize: 9, color: C.muted }}>{selectedDriver.status}</span>
                   {selectedDriver.rating > 0 && <>
-                    <span style={{ fontSize: 10, color: C.muted }}>·</span>
-                    <span style={{ fontSize: 10, color: isDark ? '#FFD700' : '#F59E0B' }}>★ {selectedDriver.rating}</span>
+                    <span style={{ fontSize: 9, color: C.muted }}>·</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: isDark ? '#FFD700' : '#F59E0B' }}>★ {selectedDriver.rating}</span>
                   </>}
                 </div>
               )}
 
               {/* Map */}
-              <div style={{ height: mob ? 280 : 400, position: 'relative' }}>
+              <div style={{ height: mob ? 260 : 380, position: 'relative' }}>
                 <MapView
                   center={selectedDriver?.location ? [selectedDriver.location.lat, selectedDriver.location.lng] : [19.065, 72.878]}
                   zoom={selectedDriver ? 14 : 12}
@@ -559,19 +562,19 @@ function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetDat
                   showLocate={false} className="w-full h-full"
                 />
                 {/* Legend overlay */}
-                <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 500, background: isDark ? 'rgba(24,24,27,0.9)' : 'rgba(255,255,255,0.95)', borderRadius: 8, padding: '6px 10px', display: 'flex', gap: 12, fontSize: 10, fontWeight: 600, border: `1px solid ${C.border}`, backdropFilter: 'blur(8px)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#10B981' }} /> Active</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#94A3B8' }} /> Idle</span>
+                <div style={{ position: 'absolute', bottom: 8, left: 8, zIndex: 500, background: isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.95)', borderRadius: 8, padding: '5px 10px', display: 'flex', gap: 10, fontSize: 9, fontWeight: 700, border: `1px solid ${C.border}`, backdropFilter: 'blur(10px)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: 4, background: '#10B981', boxShadow: '0 0 4px rgba(16,185,129,0.5)' }} /> Active</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: 4, background: '#94A3B8' }} /> Idle</span>
                 </div>
               </div>
 
               {/* Driver routes list */}
               {selectedDriver && driverBookings.length > 0 && (
-                <div style={{ borderTop: `1px solid ${C.border}`, maxHeight: 100, overflowY: 'auto' }}>
+                <div style={{ borderTop: `1px solid ${C.border}`, maxHeight: 80, overflowY: 'auto' }}>
                   {driverBookings.map(b => (
-                    <div key={b.id} style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}`, fontSize: 11 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-                        <Icon name="route" size={14} style={{ color: '#10B981', flexShrink: 0 }} />
+                    <div key={b.id} style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}`, fontSize: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
+                        <Icon name="route" size={12} style={{ color: '#10B981', flexShrink: 0 }} />
                         <span style={{ fontWeight: 600, color: C.text }}>{b.id}</span>
                         {!mob && <span style={{ color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.pickup?.address} → {b.dropoff?.address}</span>}
                       </div>
@@ -580,7 +583,7 @@ function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetDat
                   ))}
                 </div>
               )}
-            </Box>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -709,10 +712,15 @@ const TRUCK_TYPES = [
 function DriversTab({ driversList, C, isDark, mob }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editDriver, setEditDriver] = useState(null);
-  const [form, setForm] = useState({ name: '', phone: '', truckId: '', truckType: 'medium', make: '', model: '', year: '2024', plateNumber: '' });
+  const [form, setForm] = useState({ name: '', phone: '', city: '', truckType: 'medium', make: '', model: '', year: '2024', plateNumber: '', licenseNumber: '', licenseExpiry: '', profilePicture: null, vehiclePicture: null, rcFront: null, rcBack: null, dlFront: null, dlBack: null });
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [modelOptions, setModelOptions] = useState([]);
   const [drivers, setDrivers] = useState(driversList);
+  const [searchQuery, setSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
+  const [viewDriver, setViewDriver] = useState(null);
 
   useEffect(() => { setDrivers(driversList); }, [driversList]);
 
@@ -742,9 +750,10 @@ function DriversTab({ driversList, C, isDark, mob }) {
     setApprovingId(null);
   };
 
-  const openAdd = () => { setForm({ name: '', phone: '', truckId: '', truckType: 'medium', make: '', model: '', year: '2024', plateNumber: '' }); setEditDriver(null); setShowAdd(true); };
+  const openAdd = () => { setForm({ name: '', phone: '', city: '', truckType: 'medium', make: '', model: '', year: '2024', plateNumber: '', licenseNumber: '', licenseExpiry: '', profilePicture: null, vehiclePicture: null, rcFront: null, rcBack: null, dlFront: null, dlBack: null }); setSelectedBrand(''); setModelOptions([]); setEditDriver(null); setShowAdd(true); };
   const openEdit = (d) => {
-    setForm({ name: d.name, phone: d.phone, truckId: d.truckId || '', truckType: d.truckType || 'medium', make: d.vehicleDetails?.make || '', model: d.vehicleDetails?.model || '', year: String(d.vehicleDetails?.year || '2024'), plateNumber: d.vehicleDetails?.plateNumber || '' });
+    setForm({ name: d.name, phone: d.phone, city: d.city || '', truckType: d.truckType || 'medium', make: d.vehicleDetails?.make || '', model: d.vehicleDetails?.model || '', year: String(d.vehicleDetails?.year || '2024'), plateNumber: d.vehicleDetails?.plateNumber || '', licenseNumber: d.licenseNumber || '', licenseExpiry: d.licenseExpiry || '', profilePicture: d.profilePicture || null, vehiclePicture: d.vehiclePicture || null, rcFront: null, rcBack: null, dlFront: null, dlBack: null });
+    setSelectedBrand(d.vehicleDetails?.make || ''); setModelOptions(d.vehicleDetails?.make ? ALL_TRUCK_MODELS.filter(t => t.brand === d.vehicleDetails.make) : []);
     setEditDriver(d); setShowAdd(true);
   };
 
@@ -752,8 +761,36 @@ function DriversTab({ driversList, C, isDark, mob }) {
     setSaving(true);
     try {
       const truckInfo = TRUCK_TYPES.find(t => t.id === form.truckType) || TRUCK_TYPES[1];
-      const payload = { name: form.name, phone: form.phone, truckId: form.truckId, truckType: form.truckType, payRate: truckInfo.payRate, basePay: truckInfo.basePay, vehicleDetails: { make: form.make, model: form.model, year: Number(form.year), plateNumber: form.plateNumber } };
+      // Track which mandatory fields are missing
+      const missing = [];
+      if (!form.name) missing.push('name');
+      if (!form.phone) missing.push('phone');
+      if (!form.city) missing.push('city');
+      if (!form.licenseNumber) missing.push('licenseNumber');
+      if (!form.licenseExpiry) missing.push('licenseExpiry');
+      if (!form.make && !form.model) missing.push('vehicleDetails');
+      if (!form.plateNumber) missing.push('plateNumber');
+
+      const payload = {
+        name: form.name || 'New Driver', phone: form.phone || '', city: form.city || '',
+        truckType: form.truckType, payRate: truckInfo.payRate, basePay: truckInfo.basePay,
+        licenseNumber: form.licenseNumber, licenseExpiry: form.licenseExpiry,
+        vehicleDetails: { make: form.make, model: form.model ? `${form.make} ${form.model}` : '', year: Number(form.year), plateNumber: form.plateNumber, regNumber: form.plateNumber },
+        missingFields: missing.length > 0 ? missing : null,
+        profileIncomplete: missing.length > 0,
+        createdByAdmin: true,
+      };
+      if (form.profilePicture) payload.profilePicture = form.profilePicture;
+      if (form.vehiclePicture) payload.vehiclePicture = form.vehiclePicture;
+      if (form.rcFront || form.rcBack || form.dlFront || form.dlBack) {
+        payload.uploadedDocuments = {};
+        if (form.rcFront) payload.uploadedDocuments.rcFront = form.rcFront;
+        if (form.rcBack) payload.uploadedDocuments.rcBack = form.rcBack;
+        if (form.dlFront) payload.uploadedDocuments.dlFront = form.dlFront;
+        if (form.dlBack) payload.uploadedDocuments.dlBack = form.dlBack;
+      }
       if (editDriver) {
+        // On edit, recalculate missing
         const updated = await (await fetch(`/api/drivers/${editDriver.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })).json();
         setDrivers(prev => prev.map(d => d.id === editDriver.id ? { ...d, ...updated } : d));
       } else {
@@ -767,10 +804,21 @@ function DriversTab({ driversList, C, isDark, mob }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Add button */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: C.accent, color: isDark ? '#000' : '#fff', boxShadow: `0 2px 10px ${C.accent}40` }}>
-          <Icon name="person_add" size={18} /> Add Driver
+      {/* Search + Add */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <Icon name="search" size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: C.muted }} />
+          <input type="text" placeholder="Search by Driver ID, name, or phone..." value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px 10px 38px', borderRadius: 10, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 2 }}>
+              <Icon name="close" size={16} />
+            </button>
+          )}
+        </div>
+        <button onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: C.accent, color: isDark ? '#000' : '#fff', flexShrink: 0 }}>
+          <Icon name="person_add" size={16} /> Add
         </button>
       </div>
 
@@ -844,9 +892,9 @@ function DriversTab({ driversList, C, isDark, mob }) {
                 )}
 
                 {/* Applied date */}
-                {pd.appliedDate && (
+                {(pd.appliedAt || pd.appliedDate) && (
                   <div style={{ fontSize: 11, color: C.muted, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Icon name="calendar_today" size={13} /> Applied: {new Date(pd.appliedDate).toLocaleDateString()}
+                    <Icon name="calendar_today" size={13} /> Applied: {new Date(pd.appliedAt || pd.appliedDate).toLocaleDateString()}
                   </div>
                 )}
 
@@ -881,7 +929,11 @@ function DriversTab({ driversList, C, isDark, mob }) {
 
       {/* Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-        {drivers.map(d => (
+        {drivers.filter(d => {
+          if (!searchQuery) return true;
+          const q = searchQuery.toLowerCase();
+          return (d.id?.toLowerCase().includes(q) || d.name?.toLowerCase().includes(q) || d.phone?.replace(/\D/g, '').includes(q.replace(/\D/g, '')) || d.city?.toLowerCase().includes(q) || d.licenseNumber?.toLowerCase().includes(q) || d.vehicleDetails?.plateNumber?.toLowerCase().includes(q));
+        }).map(d => (
           <Box key={d.id} C={C}>
             <div style={{ padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -933,72 +985,283 @@ function DriversTab({ driversList, C, isDark, mob }) {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="local_shipping" size={14} />{d.truckId || 'N/A'}</span>
-                <button onClick={() => openEdit(d)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: C.accent }}>
-                  <Icon name="edit" size={14} /> Edit
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => setViewDriver(d)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: isDark ? '#60A5FA' : '#3B82F6' }}>
+                    <Icon name="visibility" size={14} /> View
+                  </button>
+                  <button onClick={() => openEdit(d)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: C.accent }}>
+                    <Icon name="edit" size={14} /> Edit
+                  </button>
+                </div>
               </div>
             </div>
           </Box>
         ))}
         {drivers.length === 0 && <div style={{ gridColumn: '1/-1', padding: '48px 0', textAlign: 'center', fontSize: 13, color: C.muted }}>No drivers</div>}
+        {drivers.length > 0 && searchQuery && drivers.filter(d => { const q = searchQuery.toLowerCase(); return (d.id?.toLowerCase().includes(q) || d.name?.toLowerCase().includes(q) || d.phone?.replace(/\D/g, '').includes(q.replace(/\D/g, ''))); }).length === 0 && (
+          <div style={{ gridColumn: '1/-1', padding: '40px 0', textAlign: 'center' }}>
+            <Icon name="search_off" size={36} style={{ color: C.muted, marginBottom: 8 }} />
+            <div style={{ fontSize: 13, color: C.muted }}>No driver found for "{searchQuery}"</div>
+          </div>
+        )}
       </div>
+
+      {/* View Driver Detail Modal */}
+      <AnimatePresence>
+        {viewDriver && (
+          <Modal open={!!viewDriver} onClose={() => setViewDriver(null)} title={`Driver: ${viewDriver.name}`} C={C} isDark={isDark}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Profile */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                {viewDriver.profilePicture ? (
+                  <img src={viewDriver.profilePicture} alt={viewDriver.name} style={{ width: 64, height: 64, borderRadius: 14, objectFit: 'cover', border: `2px solid ${C.border}` }} />
+                ) : (
+                  <div style={{ width: 64, height: 64, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(52,211,153,0.1)' : '#ECFDF5' }}>
+                    <Icon name="person" filled size={32} style={{ color: isDark ? '#34D399' : '#10B981' }} />
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{viewDriver.name}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>ID: {viewDriver.id}</div>
+                  <div style={{ marginTop: 4 }}><StatusBadge status={viewDriver.status} /></div>
+                </div>
+              </div>
+
+              {/* Contact & Location */}
+              <div style={{ padding: '12px 14px', borderRadius: 10, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Contact & Location</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>Phone</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.phone || '—'}</div></div>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>City</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.city || '—'}</div></div>
+                </div>
+              </div>
+
+              {/* Vehicle Details */}
+              <div style={{ padding: '12px 14px', borderRadius: 10, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Vehicle Details</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>Type</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.vehicleDetails?.type || viewDriver.truckType || '—'}</div></div>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>Brand</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.vehicleDetails?.make || '—'}</div></div>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>Model</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.vehicleDetails?.model || '—'}</div></div>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>Year</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.vehicleDetails?.year || '—'}</div></div>
+                  <div style={{ gridColumn: '1 / -1' }}><span style={{ fontSize: 10, color: C.muted }}>Registration Number</span><div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: '0.05em' }}>{viewDriver.vehicleDetails?.regNumber || viewDriver.vehicleDetails?.plateNumber || '—'}</div></div>
+                </div>
+              </div>
+
+              {/* License Details */}
+              <div style={{ padding: '12px 14px', borderRadius: 10, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>License Details</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>License Number</span><div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{viewDriver.licenseNumber || '—'}</div></div>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>Expiry Date</span><div style={{ fontSize: 13, fontWeight: 600, color: viewDriver.licenseExpiry && new Date(viewDriver.licenseExpiry) < new Date() ? '#EF4444' : C.text }}>{viewDriver.licenseExpiry ? new Date(viewDriver.licenseExpiry).toLocaleDateString() : '—'}</div></div>
+                </div>
+              </div>
+
+              {/* Performance */}
+              <div style={{ padding: '12px 14px', borderRadius: 10, background: isDark ? '#27272A' : '#F8FAFC', border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Performance</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>Rating</span><div style={{ fontSize: 15, fontWeight: 800, color: isDark ? '#FFD700' : '#F59E0B', display: 'flex', alignItems: 'center', gap: 3 }}><Icon name="star" filled size={14} />{viewDriver.rating || 0}</div></div>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>Earnings</span><div style={{ fontSize: 15, fontWeight: 800, color: C.accent }}>₹{viewDriver.earnings?.toLocaleString() || '0'}</div></div>
+                  <div><span style={{ fontSize: 10, color: C.muted }}>Trips</span><div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{viewDriver.stats?.totalTrips || 0}</div></div>
+                </div>
+              </div>
+
+              {/* Photos & Documents */}
+              {(viewDriver.vehiclePicture || viewDriver.uploadedDocuments) && (
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Photos & Documents</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                    {viewDriver.vehiclePicture && (
+                      <div>
+                        <img src={viewDriver.vehiclePicture} alt="Vehicle" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
+                        <div style={{ fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center', fontWeight: 600 }}>Vehicle</div>
+                      </div>
+                    )}
+                    {viewDriver.uploadedDocuments?.rcFront && (
+                      <div>
+                        <img src={viewDriver.uploadedDocuments.rcFront} alt="RC Front" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
+                        <div style={{ fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center', fontWeight: 600 }}>RC Front</div>
+                      </div>
+                    )}
+                    {viewDriver.uploadedDocuments?.rcBack && (
+                      <div>
+                        <img src={viewDriver.uploadedDocuments.rcBack} alt="RC Back" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
+                        <div style={{ fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center', fontWeight: 600 }}>RC Back</div>
+                      </div>
+                    )}
+                    {viewDriver.uploadedDocuments?.dlFront && (
+                      <div>
+                        <img src={viewDriver.uploadedDocuments.dlFront} alt="DL Front" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
+                        <div style={{ fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center', fontWeight: 600 }}>DL Front</div>
+                      </div>
+                    )}
+                    {viewDriver.uploadedDocuments?.dlBack && (
+                      <div>
+                        <img src={viewDriver.uploadedDocuments.dlBack} alt="DL Back" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.border}` }} />
+                        <div style={{ fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center', fontWeight: 600 }}>DL Back</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Dates */}
+              <div style={{ paddingTop: 8, borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {(viewDriver.appliedAt || viewDriver.appliedDate) && (
+                  <div style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="calendar_today" size={13} /> Registered: {new Date(viewDriver.appliedAt || viewDriver.appliedDate).toLocaleDateString()}
+                  </div>
+                )}
+                {viewDriver.lastEditedAt && (
+                  <div style={{ fontSize: 11, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="edit_note" size={13} /> Last edited: {new Date(viewDriver.lastEditedAt).toLocaleString()}
+                    {viewDriver.lastEditedFields?.length > 0 && <span style={{ fontWeight: 600 }}> ({viewDriver.lastEditedFields.join(', ')})</span>}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
 
       {/* Add/Edit Modal */}
       <AnimatePresence>
         {showAdd && (
           <Modal open={showAdd} onClose={() => setShowAdd(false)} title={editDriver ? `Edit Driver: ${editDriver.name}` : 'Add New Driver'} C={C} isDark={isDark}>
+            {/* Info banner */}
+            {!editDriver && (
+              <div style={{ padding: '8px 12px', borderRadius: 8, background: isDark ? 'rgba(59,130,246,0.08)' : '#EFF6FF', border: `1px solid ${isDark ? 'rgba(59,130,246,0.2)' : '#BFDBFE'}`, marginBottom: 14, fontSize: 11, color: isDark ? '#60A5FA' : '#2563EB', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="info" size={14} /> All fields optional. Driver will be notified to complete missing details.
+              </div>
+            )}
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Personal Info</div>
             <ModalInput label="Full Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Driver name" C={C} />
-            <ModalInput label="Phone" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} placeholder="+1-555-0000" C={C} />
-            <ModalInput label="Truck ID" value={form.truckId} onChange={v => setForm(f => ({ ...f, truckId: v }))} placeholder="MK-XXXX-PRO" C={C} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <ModalInput label="Phone" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} placeholder="+91 9876543210" C={C} />
+              <ModalInput label="City" value={form.city} onChange={v => setForm(f => ({ ...f, city: v }))} placeholder="e.g. Mumbai" C={C} />
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, marginTop: 14 }}>License Info</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <ModalInput label="License Number" value={form.licenseNumber} onChange={v => setForm(f => ({ ...f, licenseNumber: v }))} placeholder="TN01 20190012345" C={C} />
+              <ModalInput label="License Expiry" value={form.licenseExpiry} onChange={v => setForm(f => ({ ...f, licenseExpiry: v }))} placeholder="" type="date" C={C} />
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, marginTop: 14 }}>Truck & Vehicle</div>
 
             {/* Truck Type Select */}
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Truck Type</div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 6 }}>
                 {TRUCK_TYPES.map(tt => {
                   const selected = form.truckType === tt.id;
                   return (
                     <button key={tt.id} onClick={() => setForm(f => ({ ...f, truckType: tt.id }))}
                       style={{
-                        flex: 1, padding: '12px 8px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                        flex: 1, padding: '10px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
                         border: selected ? `2px solid ${C.accent}` : `1px solid ${C.border}`,
-                        background: selected ? C.accentBg : 'transparent', transition: 'all 0.15s',
+                        background: selected ? C.accentBg : 'transparent',
                       }}>
-                      <Icon name={tt.icon} filled size={22} style={{ color: selected ? C.accent : C.muted, display: 'block', margin: '0 auto 6px' }} />
-                      <div style={{ fontSize: 11, fontWeight: 600, color: selected ? C.text : C.sub }}>{tt.id.charAt(0).toUpperCase() + tt.id.slice(1)}</div>
-                      <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{tt.label.match(/\(([^)]+)\)/)?.[1]}</div>
+                      <Icon name={tt.icon} filled size={18} style={{ color: selected ? C.accent : C.muted, display: 'block', margin: '0 auto 4px' }} />
+                      <div style={{ fontSize: 10, fontWeight: 600, color: selected ? C.text : C.sub }}>{tt.id.charAt(0).toUpperCase() + tt.id.slice(1)}</div>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Pay Rate Display - auto calculated from truck type */}
-            {(() => {
-              const tt = TRUCK_TYPES.find(t => t.id === form.truckType) || TRUCK_TYPES[1];
+            {/* Vehicle Brand - button grid */}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Vehicle Brand</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                {Object.keys(INDIAN_TRUCKS).map(brand => {
+                  const sel = selectedBrand === brand;
+                  return (
+                    <button key={brand} onClick={() => { setSelectedBrand(brand); setForm(f => ({ ...f, make: brand, model: '' })); setModelOptions(ALL_TRUCK_MODELS.filter(t => t.brand === brand)); }}
+                      style={{ padding: '8px 4px', borderRadius: 6, cursor: 'pointer', textAlign: 'center', border: sel ? `2px solid ${C.accent}` : `1px solid ${C.border}`, background: sel ? C.accentBg : 'transparent', fontSize: 10, fontWeight: sel ? 700 : 500, color: sel ? C.accent : C.text }}>
+                      {brand}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Vehicle Model - list from selected brand */}
+            {modelOptions.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Vehicle Model {form.model && <span style={{ color: C.accent }}>✓ {form.make} {form.model}</span>}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 4, maxHeight: 140, overflowY: 'auto' }}>
+                  {modelOptions.map((t, i) => {
+                    const sel = form.model === t.model;
+                    return (
+                      <button key={i} onClick={() => setForm(f => ({ ...f, model: t.model }))}
+                        style={{ padding: '8px 6px', borderRadius: 6, cursor: 'pointer', textAlign: 'left', border: sel ? `2px solid ${C.accent}` : `1px solid ${C.border}`, background: sel ? C.accentBg : 'transparent', fontSize: 11, fontWeight: sel ? 700 : 500, color: sel ? C.accent : C.text, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Icon name="local_shipping" size={12} style={{ color: sel ? C.accent : C.muted }} /> {t.model}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <ModalInput label="Year" value={form.year} onChange={v => setForm(f => ({ ...f, year: v }))} placeholder="2024" type="number" C={C} />
+              <ModalInput label="Reg Number" value={form.plateNumber} onChange={v => setForm(f => ({ ...f, plateNumber: v }))} placeholder="MH 04 AB 1234" C={C} />
+            </div>
+
+            {/* Document Uploads */}
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, marginTop: 14 }}>Documents & Photos</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              {[
+                { key: 'profilePicture', label: 'Profile', icon: 'person' },
+                { key: 'vehiclePicture', label: 'Vehicle', icon: 'directions_car' },
+                { key: 'rcFront', label: 'RC Front', icon: 'description' },
+                { key: 'rcBack', label: 'RC Back', icon: 'flip' },
+                { key: 'dlFront', label: 'DL Front', icon: 'badge' },
+                { key: 'dlBack', label: 'DL Back', icon: 'flip' },
+              ].map(doc => (
+                <div key={doc.key} style={{ textAlign: 'center' }}>
+                  <input type="file" accept="image/*" id={`admin-${doc.key}`} style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onloadend = () => setForm(prev => ({ ...prev, [doc.key]: r.result })); r.readAsDataURL(f); }} />
+                  {form[doc.key] ? (
+                    <div style={{ position: 'relative' }}>
+                      <img src={form[doc.key]} alt={doc.label} style={{ width: '100%', height: 56, objectFit: 'cover', borderRadius: 8, border: `2px solid ${C.accent}` }} />
+                      <button onClick={() => setForm(f => ({ ...f, [doc.key]: null }))}
+                        style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: 9, background: '#EF4444', border: '2px solid white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', padding: 0 }}>
+                        <Icon name="close" size={10} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label htmlFor={`admin-${doc.key}`}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '12px 4px', borderRadius: 8, border: `1.5px dashed ${C.border}`, cursor: 'pointer', background: 'transparent' }}>
+                      <Icon name={doc.icon} size={18} style={{ color: C.muted }} />
+                    </label>
+                  )}
+                  <div style={{ fontSize: 8, fontWeight: 600, color: C.muted, marginTop: 3 }}>{doc.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Missing fields warning */}
+            {!editDriver && (() => {
+              const m = [];
+              if (!form.name) m.push('Name');
+              if (!form.phone) m.push('Phone');
+              if (!form.licenseNumber) m.push('License');
+              if (!form.plateNumber) m.push('Reg Number');
+              if (m.length === 0) return null;
               return (
-                <div style={{ padding: '14px 16px', borderRadius: 10, background: isDark ? 'rgba(255,215,0,0.06)' : '#FFFBEB', border: `1px solid ${isDark ? 'rgba(255,215,0,0.15)' : '#FEF3C7'}`, marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Driver Pay (Based on Truck Type)</div>
-                    <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>Auto-calculated from {tt.id} truck rates</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: isDark ? '#FFD700' : '#F59E0B' }}>{tt.payRate}/km</div>
-                    <div style={{ fontSize: 11, color: C.muted }}>Base: ₹{tt.basePay}</div>
-                  </div>
+                <div style={{ padding: '8px 12px', borderRadius: 8, background: isDark ? 'rgba(251,191,36,0.08)' : '#FFFBEB', border: `1px solid ${isDark ? 'rgba(251,191,36,0.2)' : '#FDE68A'}`, marginTop: 10, fontSize: 11, color: isDark ? '#FBBF24' : '#92400E', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                  <Icon name="warning" size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span>Missing: {m.join(', ')}. Driver will be notified daily to complete these.</span>
                 </div>
               );
             })()}
 
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10, marginTop: 8 }}>Vehicle Details (Driver Owned)</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <ModalInput label="Make" value={form.make} onChange={v => setForm(f => ({ ...f, make: v }))} placeholder="Tata" C={C} />
-              <ModalInput label="Model" value={form.model} onChange={v => setForm(f => ({ ...f, model: v }))} placeholder="Ace Gold" C={C} />
-              <ModalInput label="Year" value={form.year} onChange={v => setForm(f => ({ ...f, year: v }))} placeholder="2024" type="number" C={C} />
-              <ModalInput label="Plate Number" value={form.plateNumber} onChange={v => setForm(f => ({ ...f, plateNumber: v }))} placeholder="MH-04-AB-1234" C={C} />
-            </div>
-            <button onClick={handleSave} disabled={saving || !form.name || !form.phone}
-              style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, marginTop: 10, background: (!form.name || !form.phone) ? C.muted : C.accent, color: isDark ? '#000' : '#fff', opacity: saving ? 0.6 : 1 }}>
+            <button onClick={handleSave} disabled={saving}
+              style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, marginTop: 12, background: C.accent, color: isDark ? '#000' : '#fff', opacity: saving ? 0.6 : 1 }}>
               {saving ? 'Saving...' : editDriver ? 'Update Driver' : 'Add Driver'}
             </button>
           </Modal>
@@ -1026,7 +1289,7 @@ function TrucksTab({ trucksList, C, isDark, mob }) {
       const map = {};
       drivers.forEach(d => { if (d.truckId) map[d.truckId] = d.name; });
       setDriverNames(map);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const openAdd = () => { setForm({ label: '', capacity: '', price: '', kmCharge: '', icon: 'local_shipping', ownerName: '' }); setEditTruck(null); setShowAdd(true); };
@@ -1127,6 +1390,161 @@ function TrucksTab({ trucksList, C, isDark, mob }) {
           </Modal>
         )}
       </AnimatePresence>
+
+      {/* ── Pricing Settings ── */}
+      <PricingSection C={C} isDark={isDark} mob={mob} />
+    </div>
+  );
+}
+
+/* ═══ Pricing Section (inside Trucks tab) ═══ */
+function PricingSection({ C, isDark, mob }) {
+  const [config, setConfig] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/pricing/config').then(r => r.json()).then(setConfig).catch(() => { });
+  }, []);
+
+  if (!config) return null;
+
+  const update = (section, key, value) => {
+    setConfig(prev => ({ ...prev, [section]: { ...prev[section], [key]: Number(value) || 0 } }));
+    setSaved(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetch('/api/pricing/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) { console.error(e); }
+    setSaving(false);
+  };
+
+  const handlingLabels = { standard: 'Standard', fragile: 'Fragile', hazmat: 'Hazardous', temperature: 'Temperature', oversized: 'Oversized' };
+  const handlingIcons = { standard: 'inventory_2', fragile: 'warning', hazmat: 'science', temperature: 'thermostat', oversized: 'open_in_full' };
+  const weightLabels = { below500: '< 500 KG', above500: '500-2000 KG', above2000: '2000-5000 KG', above5000: '> 5000 KG' };
+  const priorityLabels = { standard: 'Standard', express: 'Express', urgent: 'Urgent' };
+
+  const PriceCell = ({ label, value, onChange }) => (
+    <div style={{ position: 'relative' }}>
+      <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, marginBottom: 3 }}>{label}</div>
+      <div style={{ position: 'relative' }}>
+        <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 700, color: C.muted }}>₹</span>
+        <input type="number" value={value} onChange={e => onChange(e.target.value)}
+          style={{ width: '100%', padding: '7px 7px 7px 22px', borderRadius: 6, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 13, fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Toggle header */}
+      <button onClick={() => setExpanded(!expanded)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderRadius: 12, border: `1px solid ${C.border}`, background: C.card, cursor: 'pointer', marginBottom: expanded ? 14 : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(249,115,22,0.1)' : '#FFF7ED' }}>
+            <Icon name="currency_rupee" size={16} style={{ color: isDark ? '#FB923C' : '#F97316' }} />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Pricing Settings</div>
+            <div style={{ fontSize: 10, color: C.muted }}>Handling, weight, priority & surge charges</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {saved && <span style={{ fontSize: 10, fontWeight: 700, color: '#10B981' }}>Saved!</span>}
+          <Icon name={expanded ? 'expand_less' : 'expand_more'} size={20} style={{ color: C.muted }} />
+        </div>
+      </button>
+
+      {expanded && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Handling Charges */}
+          <Box C={C}>
+            <div style={{ padding: mob ? 14 : 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="inventory_2" size={14} style={{ color: isDark ? '#FB923C' : '#F97316' }} /> Handling Charges
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: mob ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 10 }}>
+                {Object.entries(config.handlingCharges || {}).map(([key, val]) => (
+                  <div key={key} style={{ padding: 10, borderRadius: 8, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#FAFAFA', textAlign: 'center' }}>
+                    <Icon name={handlingIcons[key] || 'package'} size={16} style={{ color: isDark ? '#FB923C' : '#F97316', marginBottom: 4 }} />
+                    <div style={{ fontSize: 10, fontWeight: 600, color: C.text, marginBottom: 6 }}>{handlingLabels[key] || key}</div>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: C.muted }}>₹</span>
+                      <input type="number" value={val} onChange={e => update('handlingCharges', key, e.target.value)}
+                        style={{ width: '100%', padding: '6px 6px 6px 18px', borderRadius: 6, border: `1px solid ${C.border}`, background: isDark ? '#18181B' : '#fff', color: C.text, fontSize: 13, fontWeight: 800, outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Box>
+
+          {/* Weight & Priority */}
+          <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : '1fr 1fr', gap: 14 }}>
+            <Box C={C}>
+              <div style={{ padding: mob ? 14 : 18 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="scale" size={14} style={{ color: isDark ? '#A78BFA' : '#8B5CF6' }} /> Weight Surcharges
+                </div>
+                {Object.entries(config.weightCharges || {}).map(([key, val]) => (
+                  <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: C.text }}>{weightLabels[key] || key}</span>
+                    <div style={{ width: 80 }}><PriceCell label="" value={val} onChange={v => update('weightCharges', key, v)} /></div>
+                  </div>
+                ))}
+              </div>
+            </Box>
+            <Box C={C}>
+              <div style={{ padding: mob ? 14 : 18 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="bolt" size={14} style={{ color: isDark ? '#F472B6' : '#EC4899' }} /> Priority Multipliers
+                </div>
+                {Object.entries(config.priorityMultipliers || {}).map(([key, val]) => (
+                  <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: C.text }}>{priorityLabels[key] || key}</span>
+                    <input type="number" step="0.1" value={val} onChange={e => update('priorityMultipliers', key, e.target.value)}
+                      style={{ width: 60, padding: '6px', borderRadius: 6, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 12, fontWeight: 700, outline: 'none', textAlign: 'center', boxSizing: 'border-box' }} />
+                    <span style={{ fontSize: 10, color: C.muted }}>×</span>
+                  </div>
+                ))}
+              </div>
+            </Box>
+          </div>
+
+          {/* Surge & Min Fare */}
+          <Box C={C}>
+            <div style={{ padding: mob ? 14 : 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="tune" size={14} style={{ color: isDark ? '#22D3EE' : '#06B6D4' }} /> Commission & Surge
+              </div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                <div style={{ flex: 1, minWidth: 120 }}><PriceCell label="Minimum Fare" value={config.commission?.minimumFare || 50} onChange={v => update('commission', 'minimumFare', v)} /></div>
+                <div style={{ flex: 1, minWidth: 120 }}>
+                  <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, marginBottom: 3 }}>Surge Multiplier</div>
+                  <input type="number" step="0.1" value={config.commission?.surgeMultiplier || 1.5} onChange={e => update('commission', 'surgeMultiplier', e.target.value)}
+                    style={{ width: '100%', padding: '7px', borderRadius: 6, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 13, fontWeight: 700, outline: 'none', textAlign: 'center', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+              <div style={{ fontSize: 10, color: isDark ? '#FBBF24' : '#92400E', background: isDark ? 'rgba(255,215,0,0.05)' : '#FFFBEB', padding: '6px 10px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="info" size={12} /> Peak hours: {(config.commission?.peakHours || []).join(', ')}h
+              </div>
+            </div>
+          </Box>
+
+          {/* Save button */}
+          <button onClick={handleSave} disabled={saving}
+            style={{ width: '100%', padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: saved ? '#10B981' : (isDark ? '#FB923C' : '#F97316'), color: '#fff', opacity: saving ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Icon name={saved ? 'check_circle' : 'save'} size={16} />
+            {saving ? 'Saving...' : saved ? 'All Prices Saved!' : 'Save Pricing Settings'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1204,6 +1622,180 @@ function PaymentsTab({ paymentsList, C, isDark }) {
           </table>
         </div>
         {paymentsList.length === 0 && <div style={{ padding: '48px 0', textAlign: 'center', fontSize: 13, color: C.muted }}>No payments</div>}
+      </Box>
+    </div>
+  );
+}
+
+/* ═══ Pricing (legacy - merged into TrucksTab) ═══ */
+function PricingTab_unused({ C, isDark, mob }) {
+  const [config, setConfig] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/pricing/config').then(r => r.json()).then(setConfig).catch(() => { });
+  }, []);
+
+  if (!config) return <div style={{ padding: 48, textAlign: 'center', color: C.muted }}>Loading pricing config...</div>;
+
+  const update = (section, key, value) => {
+    setConfig(prev => ({ ...prev, [section]: { ...prev[section], [key]: Number(value) || 0 } }));
+    setSaved(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetch('/api/pricing/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) { console.error(e); }
+    setSaving(false);
+  };
+
+  const PriceInput = ({ label, value, onChange, icon, desc }) => (
+    <div style={{ flex: 1, minWidth: mob ? '100%' : 140 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+        {icon && <Icon name={icon} size={12} style={{ color: C.accent }} />}
+        {label}
+      </div>
+      <div style={{ position: 'relative' }}>
+        <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, fontWeight: 700, color: C.muted }}>₹</span>
+        <input type="number" value={value} onChange={e => onChange(e.target.value)}
+          style={{ width: '100%', padding: '10px 10px 10px 26px', borderRadius: 8, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 14, fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />
+      </div>
+      {desc && <div style={{ fontSize: 9, color: C.muted, marginTop: 3 }}>{desc}</div>}
+    </div>
+  );
+
+  const MultInput = ({ label, value, onChange }) => (
+    <div style={{ flex: 1, minWidth: mob ? '100%' : 120 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
+      <input type="number" step="0.1" value={value} onChange={e => onChange(e.target.value)}
+        style={{ width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 14, fontWeight: 700, outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
+    </div>
+  );
+
+  const handlingLabels = { standard: 'Standard', fragile: 'Fragile', hazmat: 'Hazardous', temperature: 'Temperature', oversized: 'Oversized' };
+  const handlingIcons = { standard: 'inventory_2', fragile: 'warning', hazmat: 'science', temperature: 'thermostat', oversized: 'open_in_full' };
+  const weightLabels = { below500: 'Below 500 KG', above500: '500 - 2000 KG', above2000: '2000 - 5000 KG', above5000: 'Above 5000 KG' };
+  const priorityLabels = { standard: 'Standard', express: 'Express', urgent: 'Urgent' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Save button bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: 11, color: C.muted }}>All prices in ₹ (INR). Changes reflect on user booking estimates.</div>
+        <button onClick={handleSave} disabled={saving}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: saved ? '#10B981' : C.accent, color: isDark ? '#000' : '#fff', opacity: saving ? 0.6 : 1 }}>
+          <Icon name={saved ? 'check_circle' : 'save'} size={16} />
+          {saving ? 'Saving...' : saved ? 'Saved!' : 'Save All Prices'}
+        </button>
+      </div>
+
+      {/* Truck Pricing */}
+      <Box C={C}>
+        <BoxHead title="Truck Pricing" icon="local_shipping" iconColor={isDark ? '#FBBF24' : '#F59E0B'} iconBg={isDark ? 'rgba(251,191,36,0.1)' : '#FFFBEB'} right={`${config.trucks?.length || 0} types`} C={C} />
+        <div style={{ padding: mob ? 14 : 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+            {(config.trucks || []).map(t => (
+              <div key={t.id} style={{ padding: 16, borderRadius: 12, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#FAFAFA' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(251,191,36,0.1)' : '#FFFBEB' }}>
+                    <Icon name={t.icon || 'local_shipping'} filled size={18} style={{ color: isDark ? '#FBBF24' : '#F59E0B' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{t.label}</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>{t.capacity}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <PriceInput label="Base Fare" value={t.price} onChange={v => {
+                    setConfig(prev => ({ ...prev, trucks: prev.trucks.map(tr => tr.id === t.id ? { ...tr, price: Number(v) || 0 } : tr) }));
+                    setSaved(false);
+                  }} desc="Starting price" />
+                  <PriceInput label="Per KM" value={t.kmCharge} onChange={v => {
+                    setConfig(prev => ({ ...prev, trucks: prev.trucks.map(tr => tr.id === t.id ? { ...tr, kmCharge: Number(v) || 0 } : tr) }));
+                    setSaved(false);
+                  }} desc="Distance rate" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Box>
+
+      {/* Handling Charges */}
+      <Box C={C}>
+        <BoxHead title="Handling Charges" icon="inventory_2" iconColor={isDark ? '#FB923C' : '#F97316'} iconBg={isDark ? 'rgba(249,115,22,0.1)' : '#FFF7ED'} C={C} />
+        <div style={{ padding: mob ? 14 : 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr 1fr' : 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+            {Object.entries(config.handlingCharges || {}).map(([key, val]) => (
+              <div key={key} style={{ padding: 14, borderRadius: 10, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#FAFAFA', textAlign: 'center' }}>
+                <Icon name={handlingIcons[key] || 'package'} size={20} style={{ color: isDark ? '#FB923C' : '#F97316', marginBottom: 6 }} />
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.text, marginBottom: 8 }}>{handlingLabels[key] || key}</div>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: C.muted }}>₹</span>
+                  <input type="number" value={val} onChange={e => update('handlingCharges', key, e.target.value)}
+                    style={{ width: '100%', padding: '8px 8px 8px 22px', borderRadius: 8, border: `1px solid ${C.border}`, background: isDark ? '#18181B' : '#fff', color: C.text, fontSize: 15, fontWeight: 800, outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Box>
+
+      {/* Weight & Priority side by side */}
+      <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : '1fr 1fr', gap: 16 }}>
+        {/* Weight Charges */}
+        <Box C={C}>
+          <BoxHead title="Weight Surcharges" icon="scale" iconColor={isDark ? '#A78BFA' : '#8B5CF6'} iconBg={isDark ? 'rgba(167,139,250,0.1)' : '#F5F3FF'} C={C} />
+          <div style={{ padding: mob ? 14 : 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {Object.entries(config.weightCharges || {}).map(([key, val]) => (
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: C.text }}>{weightLabels[key] || key}</span>
+                <div style={{ width: 100, position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 700, color: C.muted }}>₹</span>
+                  <input type="number" value={val} onChange={e => update('weightCharges', key, e.target.value)}
+                    style={{ width: '100%', padding: '8px 8px 8px 22px', borderRadius: 8, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 13, fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Box>
+
+        {/* Priority Multipliers */}
+        <Box C={C}>
+          <BoxHead title="Priority Multipliers" icon="bolt" iconColor={isDark ? '#F472B6' : '#EC4899'} iconBg={isDark ? 'rgba(244,114,182,0.1)' : '#FDF2F8'} C={C} />
+          <div style={{ padding: mob ? 14 : 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {Object.entries(config.priorityMultipliers || {}).map(([key, val]) => (
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: C.text }}>{priorityLabels[key] || key}</span>
+                <div style={{ width: 80 }}>
+                  <input type="number" step="0.1" value={val} onChange={e => update('priorityMultipliers', key, e.target.value)}
+                    style={{ width: '100%', padding: '8px', borderRadius: 8, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 13, fontWeight: 700, outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
+                </div>
+                <span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>×</span>
+              </div>
+            ))}
+          </div>
+        </Box>
+      </div>
+
+      {/* Commission & Surge */}
+      <Box C={C}>
+        <BoxHead title="Commission & Surge" icon="tune" iconColor={isDark ? '#22D3EE' : '#06B6D4'} iconBg={isDark ? 'rgba(34,211,238,0.1)' : '#ECFEFF'} C={C} />
+        <div style={{ padding: mob ? 14 : 20 }}>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <PriceInput label="Minimum Fare" value={config.commission?.minimumFare || 50} onChange={v => update('commission', 'minimumFare', v)} icon="price_check" desc="Floor price for any booking" />
+            <MultInput label="Surge Multiplier" value={config.commission?.surgeMultiplier || 1.5} onChange={v => update('commission', 'surgeMultiplier', v)} />
+          </div>
+          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: isDark ? 'rgba(255,215,0,0.05)' : '#FFFBEB', border: `1px solid ${isDark ? 'rgba(255,215,0,0.15)' : '#FDE68A'}`, fontSize: 11, color: isDark ? '#FBBF24' : '#92400E', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="info" size={14} />
+            Surge applies during peak hours ({(config.commission?.peakHours || []).join(', ')}h). Prices = base × surge multiplier.
+          </div>
+        </div>
       </Box>
     </div>
   );

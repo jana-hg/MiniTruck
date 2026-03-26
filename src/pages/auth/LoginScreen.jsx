@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import Icon from '../../components/ui/Icon';
 import { isBiometricReady, hasBiometricCredential, registerBiometric, authenticateWithBiometric, removeBiometricCredential } from '../../services/biometric';
+// import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../../config/firebase';
+import { sendMockOtp } from '../../config/otpMock';
 
 const ROLE_CFG = {
   customer: { icon: 'person', title: 'Customer Login', redirect: '/', clr: '#3B82F6', dark: '#60A5FA' },
@@ -28,10 +30,40 @@ export default function LoginScreen({ role = 'customer' }) {
 
   // Biometric states
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
+  const [loginMode, setLoginMode] = useState('password'); // 'password' | 'otp'
+  const [otpLoginSent, setOtpLoginSent] = useState(false);
+  const [otpLoginValue, setOtpLoginValue] = useState('');
+  const [otpLoginSending, setOtpLoginSending] = useState(false);
+  const [otpLoginConfirm, setOtpLoginConfirm] = useState(null);
+  const [otpLoginTimer, setOtpLoginTimer] = useState(0);
+  const recaptchaLoginRef = { current: null };
+
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotPhone, setForgotPhone] = useState('');
+  const [forgotOtpSent, setForgotOtpSent] = useState(false);
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotOtpConfirm, setForgotOtpConfirm] = useState(null);
+  const [forgotVerified, setForgotVerified] = useState(false);
+  const [forgotNewPin, setForgotNewPin] = useState('');
+  const [forgotConfirmPin, setForgotConfirmPin] = useState('');
+  const [forgotSaving, setForgotSaving] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [forgotDone, setForgotDone] = useState(false);
+  const [forgotSending, setForgotSending] = useState(false);
+  const [forgotTimer, setForgotTimer] = useState(0);
+  const [forgotUserId, setForgotUserId] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pinSaving, setPinSaving] = useState(false);
+  const [pendingChangeData, setPendingChangeData] = useState(null);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricCredential, setBiometricCredential] = useState(null);
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [pendingLogin, setPendingLogin] = useState(null); // store login data for biometric prompt
+
+  const [bioAutoTriggered, setBioAutoTriggered] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -39,8 +71,24 @@ export default function LoginScreen({ role = 'customer' }) {
       setBiometricAvailable(ready);
       if (ready) {
         const cred = hasBiometricCredential();
-        if (cred && cred.role === role) setBiometricCredential(cred);
-        else setBiometricCredential(null);
+        if (cred && cred.role === role) {
+          setBiometricCredential(cred);
+          // Auto-trigger fingerprint login on page load
+          if (!bioAutoTriggered) {
+            setBioAutoTriggered(true);
+            setBiometricLoading(true);
+            try {
+              const data = await authenticateWithBiometric();
+              login({ id: data.user?.id, name: data.user?.name }, data.role || role, data.token);
+              navigate(cfg.redirect);
+            } catch {
+              setBiometricLoading(false);
+              // Silent fail — user can tap manually or use password
+            }
+          }
+        } else {
+          setBiometricCredential(null);
+        }
       }
     })();
   }, [role]);
@@ -61,8 +109,152 @@ export default function LoginScreen({ role = 'customer' }) {
   const labelStyle = { fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, display: 'block' };
 
   const completeLogin = (data) => {
+    // Check if driver must change password on first login
+    if (data.user?.mustChangePassword) {
+      setPendingChangeData(data);
+      setShowPasswordChange(true);
+      return;
+    }
     login({ id: data.user?.id || formId, name: data.user?.name || formId }, data.role || role, data.token);
     navigate(cfg.redirect);
+  };
+
+  // OTP login timer
+  useEffect(() => {
+    if (otpLoginTimer <= 0) return;
+    const t = setTimeout(() => setOtpLoginTimer(p => p - 1), 1000);
+    return () => clearTimeout(t);
+  }, [otpLoginTimer]);
+
+  const sendLoginOtp = async () => {
+    const digits = formId.replace(/\D/g, '');
+    if (digits.length < 10) { setError('Enter a valid 10-digit phone number'); return; }
+    setOtpLoginSending(true); setError('');
+    try {
+      // Check if account exists first
+      const checkRes = await fetch('/api/auth/lookup-phone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
+      if (!checkRes.ok) {
+        setOtpLoginSending(false);
+        setError(`No ${role} account found with this number. Please register first.`);
+        return;
+      }
+
+      const result = await sendMockOtp(`+91${digits}`);
+      setOtpLoginConfirm(result);
+      setOtpLoginSent(true);
+      setOtpLoginTimer(60);
+    } catch (err) {
+      setError(err.message || 'Failed to send OTP');
+    }
+    setOtpLoginSending(false);
+  };
+
+  const verifyLoginOtp = async () => {
+    if (!otpLoginConfirm) { setError('Send OTP first'); return; }
+    setLoading(true); setError('');
+    try {
+      await otpLoginConfirm.confirm(otpLoginValue);
+      const digits = formId.replace(/\D/g, '');
+      // Get verify token first
+      const vRes = await fetch('/api/auth/verify-otp-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
+      const vData = await vRes.json();
+      if (!vRes.ok) { setLoading(false); setError(vData.error || 'Verification failed'); return; }
+      // Now login with verify token
+      const res = await fetch('/api/auth/login-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role, verifyToken: vData.verifyToken }) });
+      const data = await res.json();
+      if (!res.ok || data.error) { setLoading(false); setError(data.error || 'Login failed'); return; }
+      setLoading(false);
+      completeLogin(data);
+    } catch (err) {
+      setLoading(false);
+      setError(err.code === 'auth/invalid-verification-code' ? 'Invalid OTP' : 'Verification failed');
+    }
+  };
+
+  // Forgot password timer
+  useEffect(() => {
+    if (forgotTimer <= 0) return;
+    const t = setTimeout(() => setForgotTimer(p => p - 1), 1000);
+    return () => clearTimeout(t);
+  }, [forgotTimer]);
+
+  const sendForgotOtp = async () => {
+    const digits = forgotPhone.replace(/\D/g, '');
+    if (digits.length < 10) { setForgotError('Enter a valid 10-digit phone number'); return; }
+    setForgotSending(true); setForgotError('');
+    try {
+      // First check if account exists with this phone
+      const checkRes = await fetch('/api/auth/lookup-phone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
+      const checkData = await checkRes.json();
+      if (!checkRes.ok || !checkData.userId) {
+        setForgotSending(false);
+        setForgotError(`No ${role} account found with this phone number. Please register first.`);
+        return;
+      }
+      setForgotUserId(checkData.userId);
+
+      // Account exists — send mock OTP
+      const result = await sendMockOtp(`+91${digits}`);
+      setForgotOtpConfirm(result);
+      setForgotOtpSent(true);
+      setForgotTimer(60);
+    } catch (err) {
+      setForgotError(err.message || 'Failed to send OTP');
+    }
+    setForgotSending(false);
+  };
+
+  const [forgotVerifyToken, setForgotVerifyToken] = useState('');
+
+  const verifyForgotOtp = async () => {
+    if (!forgotOtpConfirm) return;
+    setForgotError('');
+    try {
+      await forgotOtpConfirm.confirm(forgotOtp);
+      const digits = forgotPhone.replace(/\D/g, '');
+      // Get verify token (proves OTP was verified)
+      const res = await fetch('/api/auth/verify-otp-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
+      const data = await res.json();
+      if (!res.ok) { setForgotError(data.error || 'Verification failed'); return; }
+      if (data.userId) setForgotUserId(data.userId);
+      setForgotVerifyToken(data.verifyToken);
+      setForgotVerified(true);
+    } catch (err) {
+      setForgotError(err.code === 'auth/invalid-verification-code' ? 'Invalid OTP' : 'Verification failed');
+    }
+  };
+
+  const handleForgotReset = async () => {
+    if (forgotNewPin.length !== 4) { setForgotError('Enter 4 digits'); return; }
+    if (forgotNewPin !== forgotConfirmPin) { setForgotError('Passwords do not match'); return; }
+    setForgotSaving(true); setForgotError('');
+    try {
+      const digits = forgotPhone.replace(/\D/g, '');
+      const res = await fetch('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, newPassword: forgotNewPin, role, verifyToken: forgotVerifyToken }) });
+      const data = await res.json();
+      if (!res.ok || data.error) { setForgotSaving(false); setForgotError(data.error || 'Failed'); return; }
+      setForgotSaving(false);
+      setForgotDone(true);
+    } catch { setForgotSaving(false); setForgotError('Server error'); }
+  };
+
+  const resetForgot = () => { setShowForgot(false); setForgotPhone(''); setForgotOtpSent(false); setForgotOtp(''); setForgotVerified(false); setForgotNewPin(''); setForgotConfirmPin(''); setForgotDone(false); setForgotError(''); setForgotUserId(''); setForgotVerifyToken(''); };
+
+  const handlePinChange = async () => {
+    setPinError('');
+    if (newPin.length !== 4) { setPinError('Enter 4 digits'); return; }
+    if (newPin !== confirmPin) { setPinError('PINs do not match'); return; }
+    if (newPin === '1234') { setPinError('Choose a different PIN'); return; }
+    setPinSaving(true);
+    try {
+      const res = await fetch('/api/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pendingChangeData.user.id, oldPassword: formPass, newPassword: newPin, role }) });
+      const data = await res.json();
+      if (!res.ok || data.error) { setPinSaving(false); setPinError(data.error || 'Failed'); return; }
+      setPinSaving(false);
+      // Now complete login
+      login({ id: pendingChangeData.user.id, name: pendingChangeData.user.name }, pendingChangeData.role || role, pendingChangeData.token);
+      navigate(cfg.redirect);
+    } catch { setPinSaving(false); setPinError('Server error'); }
   };
 
   const handleSubmit = async (e) => {
@@ -120,9 +312,11 @@ export default function LoginScreen({ role = 'customer' }) {
     setBiometricLoading(true);
     setError('');
     try {
+      // First complete login so auth data is in localStorage for biometric to save
+      login({ id: pendingLogin.user?.id || formId, name: pendingLogin.user?.name || formId }, pendingLogin.role || role, pendingLogin.token);
       await registerBiometric(pendingLogin.user.id, role);
       setBiometricCredential({ userId: pendingLogin.user.id, role });
-      completeLogin(pendingLogin);
+      navigate(cfg.redirect);
     } catch (err) {
       if (err.name === 'NotAllowedError') {
         setError('Fingerprint was cancelled. Logging in normally.');
@@ -139,9 +333,9 @@ export default function LoginScreen({ role = 'customer' }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px' }}>
+    <div style={{ height: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', overflow: 'hidden', boxSizing: 'border-box' }}>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-        style={{ width: '100%', maxWidth: 400, background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow, overflow: 'hidden' }}>
+        style={{ width: '100%', maxWidth: 400, maxHeight: '95vh', background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow, overflow: 'hidden' }}>
 
         {/* Header */}
         <div style={{ padding: '24px 24px 20px', textAlign: 'center' }}>
@@ -178,8 +372,154 @@ export default function LoginScreen({ role = 'customer' }) {
               </motion.div>
             )}
 
+            {/* Forgot Password Flow */}
+            {showForgot && (
+              <motion.div key="forgot" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '12px 0' }}>
+
+                {forgotDone ? (
+                  /* Success */
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ width: 56, height: 56, borderRadius: '50%', background: `${clr}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                      <Icon name="check_circle" filled size={28} style={{ color: clr }} />
+                    </div>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, color: C.text, margin: '0 0 6px' }}>Password Reset!</h3>
+                    <p style={{ fontSize: 12, color: C.sub, margin: '0 0 16px' }}>You can now login with your new password.</p>
+                    <button onClick={resetForgot}
+                      style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: clr, color: '#fff' }}>
+                      Back to Login
+                    </button>
+                  </div>
+                ) : !forgotVerified ? (
+                  /* Step 1 & 2: Phone + OTP */
+                  <>
+                    <div style={{ textAlign: 'center', marginBottom: 4 }}>
+                      <div style={{ width: 48, height: 48, borderRadius: '50%', background: `${clr}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                        <Icon name="lock_reset" size={24} style={{ color: clr }} />
+                      </div>
+                      <h3 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Reset Password</h3>
+                      <p style={{ fontSize: 11, color: C.sub, margin: '4px 0 0' }}>Enter your phone number to verify</p>
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Phone Number</label>
+                      <div style={{ display: 'flex', gap: 0 }}>
+                        <div style={{ padding: '12px 10px', borderRadius: '10px 0 0 10px', border: `1px solid ${C.border}`, borderRight: 'none', background: isDark ? '#27272A' : '#E2E8F0', fontSize: 13, fontWeight: 700, color: C.sub }}>+91</div>
+                        <input type="tel" inputMode="numeric" maxLength={10} placeholder="Enter phone number" value={forgotPhone}
+                          onChange={e => { setForgotPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setForgotOtpSent(false); setForgotOtp(''); }}
+                          style={{ ...inputStyle, borderRadius: '0 10px 10px 0' }} />
+                      </div>
+                    </div>
+
+                    {!forgotOtpSent ? (
+                      <button onClick={sendForgotOtp} disabled={forgotSending || forgotPhone.length < 10}
+                        style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: forgotPhone.length >= 10 ? clr : C.muted, color: '#fff', opacity: forgotSending ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <Icon name="sms" size={16} /> {forgotSending ? 'Sending...' : 'Send OTP'}
+                      </button>
+                    ) : (
+                      <>
+                        <div>
+                          <label style={labelStyle}>Enter OTP</label>
+                          <input type="text" inputMode="numeric" maxLength={6} placeholder="6-digit OTP" value={forgotOtp}
+                            onChange={e => setForgotOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            style={{ ...inputStyle, textAlign: 'center', letterSpacing: '0.3em', fontSize: 18, fontWeight: 700 }} />
+                        </div>
+                        <button onClick={verifyForgotOtp} disabled={forgotOtp.length < 6}
+                          style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: forgotOtp.length >= 6 ? clr : C.muted, color: '#fff' }}>
+                          Verify OTP
+                        </button>
+                        {forgotTimer > 0 ? (
+                          <div style={{ fontSize: 11, color: C.muted, textAlign: 'center' }}>Resend in {forgotTimer}s</div>
+                        ) : (
+                          <button onClick={sendForgotOtp} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: clr, textAlign: 'center' }}>Resend OTP</button>
+                        )}
+                      </>
+                    )}
+
+                    {forgotError && <p style={{ fontSize: 12, color: '#EF4444', fontWeight: 600, margin: 0 }}>{forgotError}</p>}
+                    <button onClick={resetForgot} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: C.sub, padding: 4 }}>
+                      ← Back to Login
+                    </button>
+                    <div id="recaptcha-forgot" />
+                  </>
+                ) : (
+                  /* Step 3: Set new password */
+                  <>
+                    <div style={{ textAlign: 'center', marginBottom: 4 }}>
+                      <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                        <Icon name="verified" size={24} style={{ color: '#10B981' }} />
+                      </div>
+                      <h3 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Phone Verified!</h3>
+                      <p style={{ fontSize: 11, color: C.sub, margin: '4px 0 0' }}>Set your new password</p>
+                    </div>
+                    {/* Show User ID */}
+                    {forgotUserId && (
+                      <div style={{ padding: '10px 14px', borderRadius: 8, background: isDark ? 'rgba(16,185,129,0.08)' : '#ECFDF5', border: `1px solid ${isDark ? 'rgba(16,185,129,0.2)' : '#A7F3D0'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: isDark ? '#34D399' : '#059669', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Your User ID</div>
+                          <div style={{ fontSize: 20, fontWeight: 900, color: C.text, letterSpacing: '0.06em', marginTop: 2 }}>{forgotUserId}</div>
+                        </div>
+                        <button onClick={() => navigator.clipboard?.writeText(forgotUserId)} type="button"
+                          style={{ padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 10, fontWeight: 600, color: clr }}>
+                          <Icon name="content_copy" size={12} style={{ verticalAlign: 'middle', marginRight: 3 }} />Copy
+                        </button>
+                      </div>
+                    )}
+                    <div>
+                      <label style={labelStyle}>New Password (4 digits)</label>
+                      <input type="password" inputMode="numeric" maxLength={4} placeholder="● ● ● ●" value={forgotNewPin}
+                        onChange={e => setForgotNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        style={{ ...inputStyle, textAlign: 'center', letterSpacing: '0.5em', fontSize: 22, fontWeight: 900 }} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Confirm Password</label>
+                      <input type="password" inputMode="numeric" maxLength={4} placeholder="● ● ● ●" value={forgotConfirmPin}
+                        onChange={e => setForgotConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        style={{ ...inputStyle, textAlign: 'center', letterSpacing: '0.5em', fontSize: 22, fontWeight: 900, borderColor: forgotConfirmPin.length === 4 ? (forgotConfirmPin === forgotNewPin ? '#10B981' : '#EF4444') : C.border }} />
+                    </div>
+                    {forgotError && <p style={{ fontSize: 12, color: '#EF4444', fontWeight: 600, margin: 0 }}>{forgotError}</p>}
+                    <button onClick={handleForgotReset} disabled={forgotSaving || forgotNewPin.length < 4 || forgotConfirmPin.length < 4}
+                      style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: (forgotNewPin.length === 4 && forgotConfirmPin === forgotNewPin) ? clr : C.muted, color: '#fff', opacity: forgotSaving ? 0.7 : 1 }}>
+                      {forgotSaving ? 'Resetting...' : 'Reset Password'}
+                    </button>
+                  </>
+                )}
+              </motion.div>
+            )}
+
+            {/* Force Password Change */}
+            {showPasswordChange && (
+              <motion.div key="pin-change" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '16px 0' }}>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: `${clr}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="lock_reset" size={28} style={{ color: clr }} />
+                </div>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0, textAlign: 'center' }}>Set Your New Password</h3>
+                <p style={{ fontSize: 11, color: C.sub, textAlign: 'center', margin: 0, lineHeight: 1.4 }}>
+                  Your account was created by admin. Choose a 4-digit PIN as your new password.
+                </p>
+                <div style={{ width: '100%' }}>
+                  <label style={labelStyle}>New 4-Digit PIN</label>
+                  <input type="password" inputMode="numeric" maxLength={4} placeholder="● ● ● ●" value={newPin}
+                    onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    style={{ ...inputStyle, textAlign: 'center', letterSpacing: '0.4em', fontSize: 22, fontWeight: 800 }} />
+                </div>
+                <div style={{ width: '100%' }}>
+                  <label style={labelStyle}>Confirm PIN</label>
+                  <input type="password" inputMode="numeric" maxLength={4} placeholder="● ● ● ●" value={confirmPin}
+                    onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    style={{ ...inputStyle, textAlign: 'center', letterSpacing: '0.4em', fontSize: 22, fontWeight: 800, borderColor: confirmPin.length === 4 && confirmPin === newPin ? '#10B981' : confirmPin.length === 4 ? '#EF4444' : C.border }} />
+                </div>
+                {pinError && <p style={{ fontSize: 12, color: '#EF4444', fontWeight: 600, margin: 0 }}>{pinError}</p>}
+                <button onClick={handlePinChange} disabled={pinSaving || newPin.length < 4 || confirmPin.length < 4}
+                  style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: (newPin.length === 4 && confirmPin.length === 4) ? clr : C.muted, color: '#fff', opacity: pinSaving ? 0.7 : 1 }}>
+                  {pinSaving ? 'Saving...' : 'Set Password & Login'}
+                </button>
+              </motion.div>
+            )}
+
             {/* Normal Login Form */}
-            {!showBiometricPrompt && step === 1 && (
+            {!showBiometricPrompt && !showPasswordChange && !showForgot && step === 1 && (
               <motion.form key="s1" initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 15 }}
                 onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
@@ -204,23 +544,88 @@ export default function LoginScreen({ role = 'customer' }) {
                   </div>
                 )}
 
+                {/* Login mode toggle - customer & driver */}
+                {(role === 'customer' || role === 'driver') && (
+                  <div style={{ display: 'flex', background: isDark ? '#27272A' : '#E2E8F0', borderRadius: 8, padding: 3, marginBottom: 2 }}>
+                    <button type="button" onClick={() => { setLoginMode('password'); setOtpLoginSent(false); setOtpLoginValue(''); setError(''); }}
+                      style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, background: loginMode === 'password' ? clr : 'transparent', color: loginMode === 'password' ? '#fff' : C.sub }}>
+                      Password
+                    </button>
+                    <button type="button" onClick={() => { setLoginMode('otp'); setError(''); }}
+                      style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, background: loginMode === 'otp' ? clr : 'transparent', color: loginMode === 'otp' ? '#fff' : C.sub }}>
+                      Login with OTP
+                    </button>
+                  </div>
+                )}
+
                 <div>
-                  <label style={labelStyle}>ID</label>
-                  <input type="text" placeholder="Enter your ID" value={formId} onChange={e => setFormId(e.target.value)} required style={inputStyle} />
+                  <label style={labelStyle}>{loginMode === 'otp' ? 'Phone Number' : role === 'customer' ? 'Phone Number' : role === 'driver' ? 'Driver ID' : 'Admin ID'}</label>
+                  <div style={{ display: 'flex', gap: 0 }}>
+                    {(role === 'customer' || loginMode === 'otp') && (
+                      <div style={{ padding: '12px 10px', borderRadius: '10px 0 0 10px', border: `1px solid ${C.border}`, borderRight: 'none', background: isDark ? '#27272A' : '#E2E8F0', fontSize: 13, fontWeight: 700, color: C.sub }}>+91</div>
+                    )}
+                    <input type={(role === 'customer' || loginMode === 'otp') ? 'tel' : 'text'}
+                      placeholder={loginMode === 'otp' ? 'Enter phone number' : role === 'customer' ? 'Enter phone number' : role === 'driver' ? 'Enter Driver ID' : 'Enter admin ID'}
+                      value={formId} onChange={e => { setFormId((role === 'customer' || loginMode === 'otp') ? e.target.value.replace(/\D/g, '').slice(0, 10) : e.target.value); setOtpLoginSent(false); }}
+                      inputMode={(role === 'customer' || loginMode === 'otp') ? 'numeric' : 'text'} maxLength={(role === 'customer' || loginMode === 'otp') ? 10 : undefined}
+                      required style={{ ...inputStyle, borderRadius: (role === 'customer' || loginMode === 'otp') ? '0 10px 10px 0' : 10 }} />
+                  </div>
                 </div>
-                <div>
-                  <label style={labelStyle}>Password</label>
-                  <input type="password" placeholder="Enter password" value={formPass} onChange={e => setFormPass(e.target.value)} required style={inputStyle} />
-                </div>
+
+                {/* Password mode */}
+                {loginMode === 'password' && (
+                  <div>
+                    <label style={labelStyle}>Password</label>
+                    <input type="password" placeholder="Enter password" value={formPass} onChange={e => setFormPass(e.target.value)} required style={inputStyle} />
+                  </div>
+                )}
+
+                {/* OTP mode */}
+                {loginMode === 'otp' && (role === 'customer' || role === 'driver') && (
+                  <>
+                    {!otpLoginSent ? (
+                      <button type="button" onClick={sendLoginOtp} disabled={otpLoginSending || formId.replace(/\D/g, '').length < 10}
+                        style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: formId.replace(/\D/g, '').length >= 10 ? clr : C.muted, color: '#fff', opacity: otpLoginSending ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <Icon name="sms" size={16} />
+                        {otpLoginSending ? 'Sending...' : 'Send OTP'}
+                      </button>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div>
+                          <label style={labelStyle}>Enter OTP</label>
+                          <input type="text" inputMode="numeric" maxLength={6} placeholder="6-digit OTP" value={otpLoginValue}
+                            onChange={e => setOtpLoginValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            style={{ ...inputStyle, textAlign: 'center', letterSpacing: '0.3em', fontSize: 18, fontWeight: 700 }} />
+                        </div>
+                        <button type="button" onClick={verifyLoginOtp} disabled={loading || otpLoginValue.length < 6}
+                          style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: otpLoginValue.length >= 6 ? clr : C.muted, color: '#fff', opacity: loading ? 0.7 : 1 }}>
+                          {loading ? 'Verifying...' : 'Verify & Login'}
+                        </button>
+                        {otpLoginTimer > 0 ? (
+                          <div style={{ fontSize: 11, color: C.muted, textAlign: 'center' }}>Resend in {otpLoginTimer}s</div>
+                        ) : (
+                          <button type="button" onClick={sendLoginOtp} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: clr, textAlign: 'center' }}>Resend OTP</button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
                 {error && <p style={{ fontSize: 12, color: '#EF4444', fontWeight: 600, margin: 0 }}>{error}</p>}
-                <button type="submit" disabled={loading}
-                  style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: clr, color: '#fff', opacity: loading ? 0.7 : 1, marginTop: 4 }}>
-                  {loading ? 'Authenticating...' : role === 'admin' ? 'Continue' : 'Login'}
-                </button>
+
+                {/* Password login submit */}
+                {loginMode === 'password' && (
+                  <button type="submit" disabled={loading}
+                    style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: clr, color: '#fff', opacity: loading ? 0.7 : 1, marginTop: 2 }}>
+                    {loading ? 'Authenticating...' : role === 'admin' ? 'Continue' : 'Login'}
+                  </button>
+                )}
+
+                <div id="recaptcha-login" />
               </motion.form>
             )}
 
-            {!showBiometricPrompt && step === 2 && (
+            {!showBiometricPrompt && !showPasswordChange && !showForgot && step === 2 && (
               <motion.form key="s2" initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 15 }}
                 onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ padding: '14px 16px', borderRadius: 10, background: isDark ? '#27272A' : '#F8FAFC', textAlign: 'center' }}>
@@ -246,15 +651,34 @@ export default function LoginScreen({ role = 'customer' }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '12px 24px', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {role === 'driver' ? (
-            <Link to="/register-driver" style={{ textDecoration: 'none', fontSize: 11, fontWeight: 600, color: clr }}>Register as Driver</Link>
-          ) : role === 'customer' ? (
-            <Link to="/register-user" style={{ textDecoration: 'none', fontSize: 11, fontWeight: 600, color: clr }}>Create Account</Link>
-          ) : (
-            <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>Secure Login</span>
+        <div style={{ padding: '14px 24px', borderTop: `1px solid ${C.border}` }}>
+          {role === 'customer' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Link to="/register-user" style={{ textDecoration: 'none', display: 'block', width: '100%', padding: '10px 0', textAlign: 'center', borderRadius: 8, border: `1.5px solid ${clr}`, fontSize: 13, fontWeight: 700, color: clr }}>
+                Create Account
+              </Link>
+              <button onClick={() => { setShowForgot(true); setError(''); }} type="button"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: C.muted, padding: 2, textAlign: 'center' }}>
+                Forgot Password?
+              </button>
+            </div>
           )}
-          <Link to="/login" style={{ textDecoration: 'none', fontSize: 11, fontWeight: 600, color: clr }}>Switch Portal</Link>
+          {role === 'driver' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Link to="/register-driver" style={{ textDecoration: 'none', display: 'block', width: '100%', padding: '10px 0', textAlign: 'center', borderRadius: 8, border: `1.5px solid ${clr}`, fontSize: 13, fontWeight: 700, color: clr }}>
+                Register as Driver
+              </Link>
+              <button onClick={() => { setShowForgot(true); setError(''); }} type="button"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: C.muted, padding: 2, textAlign: 'center' }}>
+                Forgot Password?
+              </button>
+            </div>
+          )}
+          {role === 'admin' && (
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ fontSize: 10, color: C.muted, fontWeight: 500 }}>Secure Admin Login</span>
+            </div>
+          )}
         </div>
       </motion.div>
     </div>

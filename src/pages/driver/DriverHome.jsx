@@ -217,6 +217,27 @@ export default function DriverHome() {
         </button>
       </div>
 
+      {/* Profile Incomplete Notification */}
+      {driver?.profileIncomplete && driver?.missingFields?.length > 0 && (
+        <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 12, background: isDark ? 'rgba(251,191,36,0.08)' : '#FFFBEB', border: `1px solid ${isDark ? 'rgba(251,191,36,0.25)' : '#FDE68A'}`, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: isDark ? 'rgba(251,191,36,0.15)' : '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon name="warning" size={18} style={{ color: isDark ? '#FBBF24' : '#D97706' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: isDark ? '#FBBF24' : '#92400E' }}>Complete Your Profile</div>
+            <div style={{ fontSize: 11, color: isDark ? '#FDE68A' : '#A16207', marginTop: 3, lineHeight: 1.4 }}>
+              Please update your profile with missing details: {driver.missingFields.map(f => {
+                const labels = { name: 'Full Name', phone: 'Phone', city: 'City', licenseNumber: 'License Number', licenseExpiry: 'License Expiry', vehicleDetails: 'Vehicle Info', plateNumber: 'Reg Number' };
+                return labels[f] || f;
+              }).join(', ')}.
+            </div>
+            <a href="/driver/profile" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8, padding: '6px 14px', borderRadius: 8, background: isDark ? '#FBBF24' : '#D97706', color: '#fff', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
+              <Icon name="edit" size={13} /> Update Profile
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Location Permission Popup */}
       {locPopup && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: 20 }} onClick={() => { setLocPopup(false); setToggling(false); }}>

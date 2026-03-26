@@ -43,6 +43,13 @@ export default function HomeBooking() {
   const [booking, setBooking] = useState(false);
   const [mapPicker, setMapPicker] = useState(null); // null | 'pickup' | 'dropoff'
   const [mapPickerCenter, setMapPickerCenter] = useState([19.076, 72.877]);
+  const [truckPrices, setTruckPrices] = useState(null); // fetched from API
+
+  useEffect(() => {
+    fetch('/api/pricing/config').then(r => r.json()).then(d => {
+      if (d.trucks) setTruckPrices(d.trucks);
+    }).catch(() => {});
+  }, []);
 
   const C = {
     bg: isDark ? '#09090B' : '#F1F5F9', card: isDark ? '#18181B' : '#FFFFFF',
@@ -211,7 +218,11 @@ export default function HomeBooking() {
           </div>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Select Truck</span>
         </div>
-        {TRUCK_TYPES.map(t => (
+        {(truckPrices || TRUCK_TYPES).map(t => {
+          const base = t.price ?? t.baseRate;
+          const km = t.kmCharge ?? t.perKm;
+          const icon = t.icon || (t.id === 'small' ? 'minor_crash' : t.id === 'large' ? 'rv_hookup' : 'local_shipping');
+          return (
           <button key={t.id} onClick={() => setTruckType(t.id)} style={{
             width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 10px', borderRadius: 12, marginBottom: 8,
             cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
@@ -219,18 +230,19 @@ export default function HomeBooking() {
             border: truckType === t.id ? `2px solid ${C.accent}` : `1px solid ${C.border}`,
           }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: truckType === t.id ? `${C.accent}20` : (isDark ? '#27272A' : '#F1F5F9'), flexShrink: 0 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 22, fontVariationSettings: "'FILL' 1", color: truckType === t.id ? C.accent : C.muted }}>{t.icon}</span>
+              <span className="material-symbols-outlined" style={{ fontSize: 22, fontVariationSettings: "'FILL' 1", color: truckType === t.id ? C.accent : C.muted }}>{icon}</span>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{t.label}</div>
               <div style={{ fontSize: 11, color: C.muted }}>{t.capacity}</div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: C.accent }}>₹{t.baseRate}</div>
-              <div style={{ fontSize: 10, color: C.muted }}>+₹{t.perKm}/km</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: C.accent }}>₹{base}</div>
+              <div style={{ fontSize: 10, color: C.muted }}>+₹{km}/km</div>
             </div>
           </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* ── Load Details ── */}

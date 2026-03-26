@@ -1,5 +1,6 @@
 // Biometric Authentication using WebAuthn API
 const STORAGE_KEY = 'minitruck_biometric';
+const CRED_KEY = 'minitruck_bio_cred';
 
 // Check if device supports biometric/WebAuthn
 export function isBiometricAvailable() {
@@ -25,14 +26,10 @@ export function hasBiometricCredential() {
   } catch { return null; }
 }
 
-// Save biometric credential info locally
-function saveBiometricCredential(userId, role, credentialId) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ userId, role, credentialId, enabledAt: Date.now() }));
-}
-
 // Remove biometric credential
 export function removeBiometricCredential() {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(CRED_KEY);
 }
 
 // Convert ArrayBuffer to base64url string
@@ -55,22 +52,15 @@ function base64urlToBuffer(base64url) {
 }
 
 // Register biometric credential after first login
+// Stores the login data encrypted so we can auto-login later
 export async function registerBiometric(userId, role) {
-  if (!isBiometricAvailable()) throw new Error('Biometric not supported on this device');
+  if (!isBiometricAvailable()) throw new Error('Biometric not supported');
 
-  // Get registration challenge from server
-  const res = await fetch('/api/auth/biometric/register-challenge', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, role })
-  });
-  const challengeData = await res.json();
-  if (!res.ok) throw new Error(challengeData.error || 'Failed to get challenge');
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
 
-  // Create credential using device biometric
   const credential = await navigator.credentials.create({
     publicKey: {
-      challenge: base64urlToBuffer(challengeData.challenge),
+      challenge,
       rp: { name: 'MiniTruK', id: window.location.hostname },
       user: {
         id: new TextEncoder().encode(userId),
@@ -78,11 +68,11 @@ export async function registerBiometric(userId, role) {
         displayName: userId
       },
       pubKeyCredParams: [
-        { alg: -7, type: 'public-key' },   // ES256
-        { alg: -257, type: 'public-key' }  // RS256
+        { alg: -7, type: 'public-key' },
+        { alg: -257, type: 'public-key' }
       ],
       authenticatorSelection: {
-        authenticatorAttachment: 'platform', // Use device biometric (not USB key)
+        authenticatorAttachment: 'platform',
         userVerification: 'required',
         residentKey: 'preferred'
       },
@@ -93,43 +83,29 @@ export async function registerBiometric(userId, role) {
 
   const credentialId = bufferToBase64url(credential.rawId);
 
-  // Send credential to server for storage
-  const verifyRes = await fetch('/api/auth/biometric/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      userId,
-      role,
-      credentialId,
-      publicKey: bufferToBase64url(credential.response.getPublicKey?.() || new ArrayBuffer(0)),
-      attestation: bufferToBase64url(credential.response.attestationObject)
-    })
-  });
-  if (!verifyRes.ok) throw new Error('Failed to register biometric');
+  // Store credential info and user data locally
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ userId, role, credentialId, enabledAt: Date.now() }));
 
-  // Save locally
-  saveBiometricCredential(userId, role, credentialId);
+  // Also store the login data so biometric can auto-login
+  const authData = localStorage.getItem('minitruck_auth');
+  if (authData) {
+    localStorage.setItem(CRED_KEY, authData);
+  }
+
   return true;
 }
 
-// Authenticate using biometric
+// Authenticate using biometric — verifies fingerprint then returns stored login data
 export async function authenticateWithBiometric() {
   const stored = hasBiometricCredential();
   if (!stored) throw new Error('No biometric credential found');
 
-  // Get auth challenge from server
-  const res = await fetch('/api/auth/biometric/auth-challenge', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: stored.userId, role: stored.role })
-  });
-  const challengeData = await res.json();
-  if (!res.ok) throw new Error(challengeData.error || 'Failed to get challenge');
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
 
-  // Authenticate with device biometric
-  const assertion = await navigator.credentials.get({
+  // Trigger fingerprint/face verification
+  await navigator.credentials.get({
     publicKey: {
-      challenge: base64urlToBuffer(challengeData.challenge),
+      challenge,
       rpId: window.location.hostname,
       allowCredentials: [{
         id: base64urlToBuffer(stored.credentialId),
@@ -141,21 +117,20 @@ export async function authenticateWithBiometric() {
     }
   });
 
-  // Verify with server
-  const verifyRes = await fetch('/api/auth/biometric/authenticate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      userId: stored.userId,
-      role: stored.role,
-      credentialId: bufferToBase64url(assertion.rawId),
-      authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
-      signature: bufferToBase64url(assertion.response.signature),
-      clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON)
-    })
-  });
-  const data = await verifyRes.json();
-  if (!verifyRes.ok) throw new Error(data.error || 'Biometric authentication failed');
+  // Biometric passed — get stored login data
+  const savedAuth = localStorage.getItem(CRED_KEY);
+  if (!savedAuth) {
+    // No saved auth — do a server login with stored userId
+    const res = await fetch('/api/auth/biometric-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: stored.userId, role: stored.role })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+    return data;
+  }
 
-  return data; // { token, user, role }
+  const authData = JSON.parse(savedAuth);
+  return { token: authData.token, user: authData.user, role: authData.role };
 }

@@ -10,7 +10,7 @@ const api = axios.create({
 // Attach auth token to every request
 api.interceptors.request.use(config => {
   try {
-    const auth = JSON.parse(sessionStorage.getItem('minitruck_auth') || '{}');
+    const auth = JSON.parse(localStorage.getItem('minitruck_auth') || '{}');
     if (auth.token) config.headers.Authorization = `Bearer ${auth.token}`;
   } catch {}
   return config;
@@ -19,7 +19,7 @@ api.interceptors.request.use(config => {
 // Auto logout on 401
 api.interceptors.response.use(r => r, err => {
   if (err.response?.status === 401) {
-    sessionStorage.removeItem('minitruck_auth');
+    localStorage.removeItem('minitruck_auth');
     if (window.location.pathname !== '/login') window.location.href = '/login';
   }
   return Promise.reject(err);
