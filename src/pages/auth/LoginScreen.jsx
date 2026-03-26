@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import Icon from '../../components/ui/Icon';
-import { isBiometricAvailable, hasBiometricCredential, registerBiometric, authenticateWithBiometric, removeBiometricCredential } from '../../services/biometric';
+import { isBiometricReady, hasBiometricCredential, registerBiometric, authenticateWithBiometric, removeBiometricCredential } from '../../services/biometric';
 
 const ROLE_CFG = {
   customer: { icon: 'person', title: 'Customer Login', redirect: '/', clr: '#3B82F6', dark: '#60A5FA' },
@@ -34,13 +34,15 @@ export default function LoginScreen({ role = 'customer' }) {
   const [pendingLogin, setPendingLogin] = useState(null); // store login data for biometric prompt
 
   useEffect(() => {
-    const available = isBiometricAvailable();
-    setBiometricAvailable(available);
-    if (available) {
-      const cred = hasBiometricCredential();
-      if (cred && cred.role === role) setBiometricCredential(cred);
-      else setBiometricCredential(null);
-    }
+    (async () => {
+      const ready = await isBiometricReady();
+      setBiometricAvailable(ready);
+      if (ready) {
+        const cred = hasBiometricCredential();
+        if (cred && cred.role === role) setBiometricCredential(cred);
+        else setBiometricCredential(null);
+      }
+    })();
   }, [role]);
 
   const C = {
@@ -116,13 +118,19 @@ export default function LoginScreen({ role = 'customer' }) {
 
   const handleEnableBiometric = async () => {
     setBiometricLoading(true);
+    setError('');
     try {
       await registerBiometric(pendingLogin.user.id, role);
       setBiometricCredential({ userId: pendingLogin.user.id, role });
       completeLogin(pendingLogin);
     } catch (err) {
-      // If user cancels or fails, just proceed with normal login
-      completeLogin(pendingLogin);
+      if (err.name === 'NotAllowedError') {
+        setError('Fingerprint was cancelled. Logging in normally.');
+      } else {
+        setError(err.message || 'Biometric setup failed.');
+      }
+      // Proceed with login after 2 seconds
+      setTimeout(() => completeLogin(pendingLogin), 2000);
     } finally { setBiometricLoading(false); }
   };
 

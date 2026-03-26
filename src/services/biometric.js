@@ -6,6 +6,17 @@ export function isBiometricAvailable() {
   return !!(window.PublicKeyCredential && navigator.credentials);
 }
 
+// Async check if platform authenticator (fingerprint/face) is actually available
+export async function isBiometricReady() {
+  try {
+    if (!isBiometricAvailable()) return false;
+    if (window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+      return await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    }
+    return false;
+  } catch { return false; }
+}
+
 // Check if user has registered biometric on this device
 export function hasBiometricCredential() {
   try {
