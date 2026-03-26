@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import Icon from '../../components/ui/Icon';
+import { isBiometricAvailable, hasBiometricCredential, registerBiometric, authenticateWithBiometric, removeBiometricCredential } from '../../services/biometric';
 
 const ROLE_CFG = {
   customer: { icon: 'person', title: 'Customer Login', redirect: '/', clr: '#3B82F6', dark: '#60A5FA' },
@@ -25,6 +26,23 @@ export default function LoginScreen({ role = 'customer' }) {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
 
+  // Biometric states
+  const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricCredential, setBiometricCredential] = useState(null);
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  const [pendingLogin, setPendingLogin] = useState(null); // store login data for biometric prompt
+
+  useEffect(() => {
+    const available = isBiometricAvailable();
+    setBiometricAvailable(available);
+    if (available) {
+      const cred = hasBiometricCredential();
+      if (cred && cred.role === role) setBiometricCredential(cred);
+      else setBiometricCredential(null);
+    }
+  }, [role]);
+
   const C = {
     bg: isDark ? '#09090B' : '#F1F5F9',
     card: isDark ? '#18181B' : '#FFFFFF',
@@ -39,6 +57,11 @@ export default function LoginScreen({ role = 'customer' }) {
 
   const inputStyle = { width: '100%', padding: '12px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.inputBg, color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' };
   const labelStyle = { fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, display: 'block' };
+
+  const completeLogin = (data) => {
+    login({ id: data.user?.id || formId, name: data.user?.name || formId }, data.role || role, data.token);
+    navigate(cfg.redirect);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,16 +79,55 @@ export default function LoginScreen({ role = 'customer' }) {
         const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: formId, password: formPass, role }) });
         const data = await res.json();
         if (!res.ok || data.error) { setLoading(false); setError(data.error || 'Invalid credentials'); return; }
-        login({ id: data.user?.id || formId, name: data.user?.name || formId }, role, data.token);
-        setLoading(false); navigate(cfg.redirect);
+        setLoading(false);
+        // If biometric is available and not yet registered for this role, prompt
+        if (biometricAvailable && !hasBiometricCredential()) {
+          setPendingLogin(data);
+          setShowBiometricPrompt(true);
+          return;
+        }
+        completeLogin(data);
       } else if (step === 2) {
         const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: formId, password: formPass, role: 'admin' }) });
         const data = await res.json();
         if (!res.ok || data.error) { setLoading(false); setError('Invalid credentials'); return; }
-        login({ id: data.user?.id || formId, name: data.user?.name || 'Admin' }, 'admin', data.token);
-        setLoading(false); navigate(cfg.redirect);
+        setLoading(false);
+        completeLogin(data);
       } else { setLoading(false); setError('Fill in both fields'); }
     } catch { setLoading(false); setError('Server error. Try again.'); }
+  };
+
+  const handleBiometricLogin = async () => {
+    setBiometricLoading(true);
+    setError('');
+    try {
+      const data = await authenticateWithBiometric();
+      completeLogin(data);
+    } catch (err) {
+      if (err.name === 'NotAllowedError') {
+        setError('Fingerprint cancelled');
+      } else {
+        setError('Biometric login failed. Use password instead.');
+        removeBiometricCredential();
+        setBiometricCredential(null);
+      }
+    } finally { setBiometricLoading(false); }
+  };
+
+  const handleEnableBiometric = async () => {
+    setBiometricLoading(true);
+    try {
+      await registerBiometric(pendingLogin.user.id, role);
+      setBiometricCredential({ userId: pendingLogin.user.id, role });
+      completeLogin(pendingLogin);
+    } catch (err) {
+      // If user cancels or fails, just proceed with normal login
+      completeLogin(pendingLogin);
+    } finally { setBiometricLoading(false); }
+  };
+
+  const handleSkipBiometric = () => {
+    if (pendingLogin) completeLogin(pendingLogin);
   };
 
   return (
@@ -85,9 +147,55 @@ export default function LoginScreen({ role = 'customer' }) {
         {/* Form */}
         <div style={{ padding: '0 24px 24px' }}>
           <AnimatePresence mode="wait">
-            {step === 1 && (
+            {/* Biometric Enable Prompt */}
+            {showBiometricPrompt && (
+              <motion.div key="bio-prompt" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '20px 0' }}>
+                <div style={{ width: 64, height: 64, borderRadius: '50%', background: `${clr}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="fingerprint" size={36} style={{ color: clr }} />
+                </div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: C.text, margin: 0, textAlign: 'center' }}>Enable Fingerprint Login?</h3>
+                <p style={{ fontSize: 12, color: C.sub, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
+                  Use your fingerprint to login quickly next time without entering your password.
+                </p>
+                <button onClick={handleEnableBiometric} disabled={biometricLoading}
+                  style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: clr, color: '#fff', opacity: biometricLoading ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <Icon name="fingerprint" size={18} style={{ color: '#fff' }} />
+                  {biometricLoading ? 'Setting up...' : 'Enable Fingerprint'}
+                </button>
+                <button onClick={handleSkipBiometric}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: C.sub, padding: 4 }}>
+                  Skip for now
+                </button>
+              </motion.div>
+            )}
+
+            {/* Normal Login Form */}
+            {!showBiometricPrompt && step === 1 && (
               <motion.form key="s1" initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 15 }}
                 onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                {/* Biometric Login Button - shown if credential exists for this role */}
+                {biometricCredential && (
+                  <div style={{ marginBottom: 6 }}>
+                    <button type="button" onClick={handleBiometricLogin} disabled={biometricLoading}
+                      style={{
+                        width: '100%', padding: '14px 0', borderRadius: 12, border: `2px solid ${clr}`,
+                        background: `${clr}10`, cursor: 'pointer', fontSize: 14, fontWeight: 700,
+                        color: clr, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                        opacity: biometricLoading ? 0.7 : 1
+                      }}>
+                      <Icon name="fingerprint" size={22} style={{ color: clr }} />
+                      {biometricLoading ? 'Verifying...' : 'Login with Fingerprint'}
+                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0 4px' }}>
+                      <div style={{ flex: 1, height: 1, background: C.border }} />
+                      <span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>or use password</span>
+                      <div style={{ flex: 1, height: 1, background: C.border }} />
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label style={labelStyle}>ID</label>
                   <input type="text" placeholder="Enter your ID" value={formId} onChange={e => setFormId(e.target.value)} required style={inputStyle} />
@@ -104,7 +212,7 @@ export default function LoginScreen({ role = 'customer' }) {
               </motion.form>
             )}
 
-            {step === 2 && (
+            {!showBiometricPrompt && step === 2 && (
               <motion.form key="s2" initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 15 }}
                 onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ padding: '14px 16px', borderRadius: 10, background: isDark ? '#27272A' : '#F8FAFC', textAlign: 'center' }}>

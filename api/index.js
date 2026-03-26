@@ -150,6 +150,59 @@ app.post('/api/otp/verify', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+//  BIOMETRIC AUTH (WebAuthn)
+// ═══════════════════════════════════════════════════════════════
+const biometricChallenges = {};
+const biometricCredentials = {};
+
+app.post('/api/auth/biometric/register-challenge', (req, res) => {
+  const { userId, role } = req.body;
+  if (!userId || !role) return res.status(400).json({ error: 'userId and role required' });
+  const challenge = require('crypto').randomBytes(32).toString('base64url');
+  biometricChallenges[userId] = { challenge, role, expiresAt: Date.now() + 60000 };
+  return res.json({ challenge });
+});
+
+app.post('/api/auth/biometric/register', (req, res) => {
+  const { userId, role, credentialId, attestation } = req.body;
+  if (!userId || !role || !credentialId) return res.status(400).json({ error: 'Missing fields' });
+  const stored = biometricChallenges[userId];
+  if (!stored || Date.now() > stored.expiresAt) return res.status(400).json({ error: 'Challenge expired' });
+  delete biometricChallenges[userId];
+  biometricCredentials[`${userId}_${role}`] = { credentialId, userId, role, registeredAt: Date.now() };
+  return res.json({ success: true });
+});
+
+app.post('/api/auth/biometric/auth-challenge', (req, res) => {
+  const { userId, role } = req.body;
+  if (!userId || !role) return res.status(400).json({ error: 'userId and role required' });
+  const cred = biometricCredentials[`${userId}_${role}`];
+  if (!cred) return res.status(404).json({ error: 'No biometric credential registered' });
+  const challenge = require('crypto').randomBytes(32).toString('base64url');
+  biometricChallenges[userId] = { challenge, role, expiresAt: Date.now() + 60000 };
+  return res.json({ challenge });
+});
+
+app.post('/api/auth/biometric/authenticate', async (req, res) => {
+  const { userId, role, credentialId } = req.body;
+  if (!userId || !role || !credentialId) return res.status(400).json({ error: 'Missing fields' });
+  const cred = biometricCredentials[`${userId}_${role}`];
+  if (!cred || cred.credentialId !== credentialId) return res.status(401).json({ error: 'Invalid biometric credential' });
+  const stored = biometricChallenges[userId];
+  if (!stored || Date.now() > stored.expiresAt) return res.status(400).json({ error: 'Challenge expired' });
+  delete biometricChallenges[userId];
+  const db = readDB();
+  let user = null;
+  if (role === 'customer') user = db.users.find(u => u.id === userId);
+  else if (role === 'driver') user = db.drivers.find(d => d.id === userId);
+  else if (role === 'admin') user = db.admins.find(a => a.id === userId);
+  if (!user) return res.status(401).json({ error: 'User not found' });
+  const token = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: '8h' });
+  const { password: _, ...safeUser } = user;
+  return res.json({ token, user: safeUser, role });
+});
+
+// ═══════════════════════════════════════════════════════════════
 //  AUTH
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/auth/login', async (req, res) => {
