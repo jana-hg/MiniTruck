@@ -46,7 +46,11 @@ export default function PortalSwitcher() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 16px 24px' }}>
       {/* Theme toggle */}
-      <button onClick={toggleTheme} style={{ position: 'absolute', top: 16, right: 16, width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1px solid ${C.border}`, background: C.card, color: C.sub }}>
+      <button onClick={toggleTheme} style={{
+        position: 'absolute', top: 16, right: 16, width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer', border: `1px solid ${isDark ? 'rgba(255,215,0,0.2)' : C.border}`,
+        background: isDark ? 'rgba(255,215,0,0.08)' : C.card, color: isDark ? '#FFD700' : C.sub
+      }}>
         <Icon name={isDark ? 'light_mode' : 'dark_mode'} size={18} />
       </button>
 
