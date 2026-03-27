@@ -12,16 +12,12 @@ export default function SplashScreen() {
   const dotColor = isCustomer ? '#60A5FA' : isDriver ? '#34D399' : '#60A5FA';
 
   useEffect(() => {
-    if (!isNative) {
-      setIsVisible(false);
-      return;
-    }
-
-    const timer = setTimeout(() => setIsVisible(false), 2500);
+    // Show splash screen for exactly 2 seconds before fading out beautifully
+    const timer = setTimeout(() => setIsVisible(false), 2000);
     return () => clearTimeout(timer);
-  }, [isNative]);
+  }, []);
 
-  if (!isNative || !isVisible) return null;
+  if (!isVisible) return null;
 
   return (
     <AnimatePresence>
@@ -63,9 +59,10 @@ export default function SplashScreen() {
             marginBottom: 8,
             textAlign: 'center',
             letterSpacing: '-0.01em',
+            textShadow: '0 2px 10px rgba(0,0,0,0.2)'
           }}
         >
-          {appName}
+          {isDriver ? 'MiniTruck Captain' : 'MiniTruck'}
         </motion.h1>
 
         {/* Subtitle */}
