@@ -1,5 +1,5 @@
 // For web: use relative path (same domain)
-// For APK: use absolute URL to backend server
+// For APK: use absolute URL to backend server (MUST be set in env for production)
 const isNative = () => {
   try {
     return window.location.href.startsWith('capacitor://');
@@ -8,10 +8,29 @@ const isNative = () => {
   }
 };
 
-// APK needs to connect to backend server
-// For development: http://192.168.x.x:5005/api
-// For production: https://your-backend-server.com/api
-const BACKEND_URL = import.meta.env.VITE_API_BASE || (isNative() ? 'http://localhost:5005/api' : '/api');
+// Get backend URL - Priority:
+// 1. VITE_API_BASE env variable (set in .env.customer/.env.driver for APK)
+// 2. For web: relative path /api (proxied to localhost:5005 in dev)
+// 3. For APK: throw error if not set (avoid localhost which doesn't work on devices)
+const getBackendURL = () => {
+  const envUrl = import.meta.env.VITE_API_BASE;
+
+  if (envUrl) {
+    return envUrl; // Use env variable if set
+  }
+
+  if (isNative()) {
+    // APK must have VITE_API_BASE set - localhost doesn't work on devices
+    console.error('❌ CRITICAL: APK is missing VITE_API_BASE environment variable');
+    console.error('   Set it in .env.customer or .env.driver before building APK');
+    throw new Error('APK missing backend URL. Set VITE_API_BASE in .env.customer or .env.driver');
+  }
+
+  // Web uses relative path (proxied in vite.config.js)
+  return '/api';
+};
+
+const BACKEND_URL = getBackendURL();
 export const API_BASE = BACKEND_URL;
 
 export const MOCK_CREDENTIALS = {
