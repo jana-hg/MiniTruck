@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePlatform } from '../context/PlatformContext';
+import { useTheme } from '../context/ThemeContext';
 import AppIcon from './ui/AppIcon';
 
 export default function SplashScreen() {
-  const { isNative, isCustomer, isDriver } = usePlatform();
+  const { isCustomer, isDriver } = usePlatform();
+  const { isDark } = useTheme();
   const [isVisible, setIsVisible] = useState(true);
 
-  const appName = isCustomer ? 'MiniTruck' : isDriver ? 'MiniTruck Captain' : '';
-  const bgColor = isCustomer ? '#3B82F6' : isDriver ? '#10B981' : '#3B82F6';
-  const dotColor = isCustomer ? '#60A5FA' : isDriver ? '#34D399' : '#60A5FA';
+  const bgColor = isDark ? '#000000' : '#FFFFFF';
+  const textColor = isDark ? '#FFFFFF' : '#0F172A';
+  const subColor = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(15, 23, 42, 0.6)';
 
   useEffect(() => {
     // Show splash screen for exactly 2 seconds before fading out beautifully
@@ -54,12 +56,12 @@ export default function SplashScreen() {
           style={{
             fontSize: 28,
             fontWeight: 700,
-            color: '#fff',
+            color: textColor,
             margin: 0,
             marginBottom: 8,
             textAlign: 'center',
             letterSpacing: '-0.01em',
-            textShadow: '0 2px 10px rgba(0,0,0,0.2)'
+            textShadow: isDark ? '0 2px 10px rgba(0,0,0,0.5)' : 'none'
           }}
         >
           {isDriver ? 'MiniTruck Captain' : 'MiniTruck'}
@@ -72,7 +74,7 @@ export default function SplashScreen() {
           transition={{ delay: 0.5 }}
           style={{
             fontSize: 13,
-            color: 'rgba(255, 255, 255, 0.8)',
+            color: subColor,
             margin: 0,
             marginBottom: 32,
           }}
@@ -95,7 +97,7 @@ export default function SplashScreen() {
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
-                background: 'rgba(255, 255, 255, 0.6)',
+                background: isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(59, 130, 246, 0.4)',
               }}
             />
           ))}
