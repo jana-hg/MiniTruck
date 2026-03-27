@@ -73,7 +73,19 @@ app.use('/api/auth', authLimiter);
 
 // ── Database helpers ──
 let dbLock = false;
-function readDB() { return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8')); }
+function readDB() {
+  try {
+    if (!fs.existsSync(DB_PATH)) {
+      // Create database if missing
+      const defaultDb = { users: [], drivers: [], admins: [{ id: 'admin', name: 'admin', password: bcrypt.hashSync('1234', 10), role: 'admin' }], bookings: [], trucks: [], fleet: [], payments: [], ratings: [], supportTickets: [], commission: [] };
+      fs.writeFileSync(DB_PATH, JSON.stringify(defaultDb, null, 2), 'utf-8');
+    }
+    return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+  } catch (e) {
+    console.error('Database error:', e.message);
+    throw new Error('Database unavailable');
+  }
+}
 function writeDB(data) {
   if (dbLock) { setTimeout(() => writeDB(data), 10); return; }
   dbLock = true;
@@ -1420,4 +1432,8 @@ app.get('/api/route', async (req, res) => {
   } catch (err) { return res.status(502).json({ error: 'Routing failed', details: err.message }); }
 });
 
+// Export for Vercel serverless
 module.exports = app;
+
+// Also export as handler for Vercel functions
+module.exports.handler = app;
