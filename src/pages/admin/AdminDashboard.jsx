@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -7,7 +7,7 @@ import Icon from '../../components/ui/Icon';
 import AppIcon from '../../components/ui/AppIcon';
 import StatusBadge from '../../components/ui/StatusBadge';
 import MapView, { createFleetActiveIcon, createFleetIdleIcon } from '../../components/map/MapView';
-import { bookings as bookingsApi, drivers as driversApi, trucks as trucksApi, payments as paymentsApi, fleet as fleetApi } from '../../services/api';
+import { bookings as bookingsApi, drivers as driversApi, trucks as trucksApi, payments as paymentsApi, fleet as fleetApi, support as supportApi } from '../../services/api';
 import { INDIAN_TRUCKS, ALL_TRUCK_MODELS } from '../../config/indianTrucks';
 
 function useIsMobile(bp = 768) {
@@ -23,6 +23,8 @@ const TABS = [
   { id: 'trucks', icon: 'local_shipping', label: 'Trucks & Pricing', color: '#F59E0B', dark: '#FBBF24' },
   { id: 'users', icon: 'group', label: 'Users', color: '#EC4899', dark: '#F472B6' },
   { id: 'payments', icon: 'account_balance_wallet', label: 'Payments', color: '#06B6D4', dark: '#22D3EE' },
+  { id: 'support', icon: 'support_agent', label: 'Support', color: '#8B5CF6', dark: '#C084FC' },
+  { id: 'database', icon: 'storage', label: 'Database', color: '#EF4444', dark: '#F87171' },
   { id: 'fleet', icon: 'map', label: 'Live Fleet', color: '#10B981', dark: '#34D399' },
 ];
 
@@ -43,6 +45,16 @@ export default function AdminDashboard() {
   const [paymentsList, setPaymentsList] = useState([]);
   const [fleetData, setFleetData] = useState([]);
   const [users, setUsers] = useState([]);
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [ticketReply, setTicketReply] = useState('');
+  const [ticketReplying, setTicketReplying] = useState(false);
+  const [ticketRecording, setTicketRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const [dbAccessToken, setDbAccessToken] = useState(null);
+  const [dbOtpStep, setDbOtpStep] = useState('idle');
+  const [dbOtpInput, setDbOtpInput] = useState('');
 
   useEffect(() => {
     bookingsApi.getBookings({}).then(d => Array.isArray(d) && setBookings(d)).catch(() => { });
@@ -51,6 +63,7 @@ export default function AdminDashboard() {
     paymentsApi.getPayments().then(d => Array.isArray(d) && setPaymentsList(d)).catch(() => { });
     fleetApi.getFleet().then(d => Array.isArray(d) && setFleetData(d)).catch(() => { });
     fetch('/api/users').then(r => r.json()).then(d => Array.isArray(d) && setUsers(d)).catch(() => { });
+    supportApi.getTickets({}).then(d => Array.isArray(d) && setSupportTickets(d)).catch(() => { });
   }, []);
 
   // Save tab selection
@@ -94,6 +107,7 @@ export default function AdminDashboard() {
     trucks: { trucksList },
     users: { users },
     payments: { paymentsList },
+    support: { supportTickets },
   };
 
   return (
@@ -318,7 +332,7 @@ export default function AdminDashboard() {
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{TABS.find(t => t.id === activeTab)?.label || 'Dashboard'}</div>
             <div style={{ fontSize: 11, color: C.muted }}>
-              {activeTab === 'overview' ? 'Real-time overview of all operations' : activeTab === 'rides' ? 'All booking and ride records' : activeTab === 'drivers' ? 'Fleet operator management' : activeTab === 'trucks' ? 'Vehicle inventory and pricing' : activeTab === 'users' ? 'Customer accounts and activity' : 'Transaction history and billing'}
+              {activeTab === 'overview' ? 'Real-time overview of all operations' : activeTab === 'rides' ? 'All booking and ride records' : activeTab === 'drivers' ? 'Fleet operator management' : activeTab === 'trucks' ? 'Vehicle inventory and pricing' : activeTab === 'users' ? 'Customer accounts and activity' : activeTab === 'payments' ? 'Transaction history and billing' : activeTab === 'support' ? 'Customer support tickets and messages' : activeTab === 'database' ? 'View, edit, and delete all database records' : 'Live fleet tracking'}
             </div>
           </div>
         </div>
@@ -331,6 +345,8 @@ export default function AdminDashboard() {
             {activeTab === 'trucks' && <TrucksTab {...tabData.trucks} C={C} isDark={isDark} mob={mob} />}
             {activeTab === 'users' && <UsersTab {...tabData.users} C={C} isDark={isDark} mob={mob} />}
             {activeTab === 'payments' && <PaymentsTab {...tabData.payments} C={C} isDark={isDark} mob={mob} />}
+            {activeTab === 'support' && <SupportTab {...tabData.support} C={C} isDark={isDark} mob={mob} selectedTicket={selectedTicket} setSelectedTicket={setSelectedTicket} ticketReply={ticketReply} setTicketReply={setTicketReply} ticketReplying={ticketReplying} setTicketReplying={setTicketReplying} ticketRecording={ticketRecording} setTicketRecording={setTicketRecording} mediaRecorderRef={mediaRecorderRef} audioChunksRef={audioChunksRef} supportApi={supportApi} setSupportTickets={setSupportTickets} />}
+            {activeTab === 'database' && <DatabaseTab C={C} isDark={isDark} mob={mob} user={user} dbAccessToken={dbAccessToken} setDbAccessToken={setDbAccessToken} dbOtpStep={dbOtpStep} setDbOtpStep={setDbOtpStep} dbOtpInput={dbOtpInput} setDbOtpInput={setDbOtpInput} />}
             {activeTab === 'fleet' && <FleetTab fleetData={fleetData} driversList={driversList} bookings={bookings} C={C} isDark={isDark} mob={mob} />}
           </motion.div>
         </AnimatePresence>
@@ -1497,6 +1513,382 @@ function FleetTab({ fleetData, driversList, bookings, C, isDark, mob }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SUPPORT TAB
+// ═══════════════════════════════════════════════════════════════
+function SupportTab({ supportTickets, C, isDark, mob, selectedTicket, setSelectedTicket, ticketReply, setTicketReply, ticketReplying, setTicketReplying, ticketRecording, setTicketRecording, mediaRecorderRef, audioChunksRef, supportApi, setSupportTickets }) {
+  const ticketUsers = {};
+  supportTickets.forEach(t => { if (!ticketUsers[t.userId]) ticketUsers[t.userId] = `User ${t.userId.slice(-4)}`; });
+
+  const handleTicketReply = async (ticketId) => {
+    if (!ticketReply.trim()) return;
+    setTicketReplying(true);
+    try {
+      await supportApi.replyTicket(ticketId, { sender: 'admin', message: ticketReply });
+      setTicketReply('');
+      const updated = await supportApi.getTickets({});
+      Array.isArray(updated) && setSupportTickets(updated);
+      if (selectedTicket) setSelectedTicket(updated.find(t => t.id === ticketId));
+    } catch (err) { console.error(err); }
+    finally { setTicketReplying(false); }
+  };
+
+  const handleResolveTicket = async (ticketId) => {
+    setTicketReplying(true);
+    try {
+      const payload = { status: 'resolved' };
+      await supportApi.replyTicket(ticketId, { ...payload });
+      const updated = await supportApi.getTickets({});
+      Array.isArray(updated) && setSupportTickets(updated);
+      setSelectedTicket(null);
+    } catch (err) { console.error(err); }
+    finally { setTicketReplying(false); }
+  };
+
+  const startVoiceRecord = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      setTicketRecording(true);
+    } catch (err) { console.error(err); alert('Microphone access required'); }
+  };
+
+  const stopVoiceRecord = async (ticketId) => {
+    return new Promise((resolve) => {
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64Audio = reader.result.split(',')[1];
+          setTicketReplying(true);
+          try {
+            await supportApi.replyTicket(ticketId, { sender: 'admin', type: 'voice', voiceData: base64Audio });
+            const updated = await supportApi.getTickets({});
+            Array.isArray(updated) && setSupportTickets(updated);
+            if (selectedTicket) setSelectedTicket(updated.find(t => t.id === ticketId));
+            setTicketRecording(false);
+            resolve();
+          } catch (err) { console.error(err); }
+          finally { setTicketReplying(false); }
+        };
+        reader.readAsDataURL(blob);
+      };
+      mediaRecorderRef.current.stop();
+    });
+  };
+
+  const box = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: C.shadow, overflow: 'hidden' };
+  const inp = { width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#fff', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' };
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : '300px 1fr', gap: 16, padding: '20px 0' }}>
+      {/* Ticket List */}
+      <div style={{ ...box, padding: 0, maxHeight: mob ? 400 : 600, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {supportTickets.length === 0 ? (
+            <div style={{ padding: 20, textAlign: 'center', color: C.muted }}>No support tickets</div>
+          ) : (
+            supportTickets.map(t => (
+              <button key={t.id} onClick={() => setSelectedTicket(t)} style={{
+                padding: 12, textAlign: 'left', border: 'none', cursor: 'pointer', background: selectedTicket?.id === t.id ? C.accentBg : 'transparent',
+                borderBottom: `1px solid ${C.border}`, transition: 'all 0.2s'
+              }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{t.subject}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{ticketUsers[t.userId]}</div>
+                    <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{t.messages?.length} messages</div>
+                  </div>
+                  <StatusBadge status={t.status === 'open' ? 'confirmed' : t.status === 'in-progress' ? 'in-transit' : 'completed'} />
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Ticket Detail */}
+      {selectedTicket ? (
+        <div style={{ ...box, padding: 16, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{selectedTicket.subject}</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{selectedTicket.category} · {selectedTicket.createdAt}</div>
+            </div>
+            <StatusBadge status={selectedTicket.status === 'open' ? 'confirmed' : selectedTicket.status === 'in-progress' ? 'in-transit' : 'completed'} />
+          </div>
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+            {selectedTicket.messages?.map((m, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: m.sender === 'admin' ? 'flex-end' : 'flex-start' }}>
+                <div style={{ maxWidth: '80%', borderRadius: 10, padding: '10px 14px', background: m.sender === 'admin' ? C.accentBg : (isDark ? '#27272A' : '#F1F5F9') }}>
+                  {m.type === 'voice' && m.voiceData ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Icon name="mic" size={14} style={{ color: C.accent }} />
+                      <audio controls style={{ height: 24, maxWidth: 150 }} src={`data:audio/webm;base64,${m.voiceData}`} />
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: C.text }}>{m.message}</div>
+                  )}
+                  <div style={{ fontSize: 9, color: C.muted, marginTop: 4 }}>{m.sender === 'admin' ? 'You' : 'Customer'} · {new Date(m.timestamp).toLocaleString()}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Reply Area */}
+          {selectedTicket.status !== 'resolved' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input placeholder="Type reply..." value={ticketReply} onChange={e => setTicketReply(e.target.value)} style={{ ...inp, flex: 1 }} />
+                <button onClick={() => handleTicketReply(selectedTicket.id)} disabled={ticketReplying} style={{
+                  padding: '10px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: C.accent, color: isDark ? '#000' : '#fff',
+                  opacity: ticketReplying ? 0.6 : 1, fontWeight: 700, fontSize: 12
+                }}>
+                  Send
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {ticketRecording ? (
+                  <button onClick={() => stopVoiceRecord(selectedTicket.id)} disabled={ticketReplying} style={{
+                    flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                    background: '#EF4444', color: '#fff', opacity: ticketReplying ? 0.6 : 1
+                  }}>
+                    🎙️ Stop Recording
+                  </button>
+                ) : (
+                  <button onClick={() => startVoiceRecord()} disabled={ticketReplying} style={{
+                    flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                    background: C.accent, color: isDark ? '#000' : '#fff', opacity: ticketReplying ? 0.6 : 1
+                  }}>
+                    🎤 Voice Reply
+                  </button>
+                )}
+                <button onClick={() => handleResolveTicket(selectedTicket.id)} disabled={ticketReplying} style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                  background: '#10B981', color: '#fff', opacity: ticketReplying ? 0.6 : 1
+                }}>
+                  ✓ Resolve
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ ...box, padding: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400, textAlign: 'center' }}>
+          <div style={{ color: C.muted }}>Select a ticket to view details</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DATABASE TAB
+// ═══════════════════════════════════════════════════════════════
+function DatabaseTab({ C, isDark, mob, user, dbAccessToken, setDbAccessToken, dbOtpStep, setDbOtpStep, dbOtpInput, setDbOtpInput }) {
+  const [collections, setCollections] = useState([]);
+  const [selectedCollection, setSelectedCollection] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [editJson, setEditJson] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+
+  const box = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: C.shadow };
+  const inp = { width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#fff', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' };
+
+  const handleSendOtp = async () => {
+    setDbOtpStep('sending');
+    try {
+      const auth = JSON.parse(localStorage.getItem('minitruck_auth') || '{}');
+      await fetch('/api/admin/db-otp/send', { method: 'POST', headers: { 'Authorization': `Bearer ${auth.token}` } });
+      setDbOtpStep('verifying');
+    } catch (err) { console.error(err); setDbOtpStep('idle'); alert('Failed to send OTP'); }
+  };
+
+  const handleVerifyOtp = async () => {
+    setDbOtpStep('sending');
+    try {
+      const auth = JSON.parse(localStorage.getItem('minitruck_auth') || '{}');
+      const res = await fetch('/api/admin/db-otp/verify', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: user?.phone || '9999999999', otp: dbOtpInput })
+      });
+      if (!res.ok) throw new Error('Invalid OTP');
+      const data = await res.json();
+      setDbAccessToken(data.dbAccessToken);
+      setDbOtpInput('');
+      setDbOtpStep('idle');
+      setTimeout(() => setDbAccessToken(null), 10 * 60 * 1000);
+      setCollections(['users', 'drivers', 'admins', 'trucks', 'bookings', 'earnings', 'fleet', 'payments', 'wallet', 'ratings', 'supportTickets', 'commission', 'handlingCharges', 'weightCharges', 'priorityMultipliers']);
+    } catch (err) { console.error(err); setDbOtpStep('idle'); alert('Invalid OTP'); }
+  };
+
+  const loadCollection = async (colName) => {
+    try {
+      const res = await fetch(`/api/admin/db/${colName}`, { headers: { 'x-db-token': dbAccessToken } });
+      if (!res.ok) throw new Error('Failed to load');
+      const data = await res.json();
+      setRecords(data[colName] || []);
+      setSelectedCollection(colName);
+    } catch (err) { console.error(err); alert('Failed to load collection'); }
+  };
+
+  const handleEditRecord = (record) => {
+    setEditingRecord(record.id);
+    setEditJson(JSON.stringify(record, null, 2));
+  };
+
+  const handleSaveEdit = async (recordId) => {
+    try {
+      const updated = JSON.parse(editJson);
+      const res = await fetch(`/api/admin/db/${selectedCollection}/${recordId}`, {
+        method: 'PUT',
+        headers: { 'x-db-token': dbAccessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      setEditingRecord(null);
+      loadCollection(selectedCollection);
+      alert('Record updated');
+    } catch (err) { console.error(err); alert('Update failed: ' + err.message); }
+  };
+
+  const handleDeleteRecord = async (recordId) => {
+    try {
+      const res = await fetch(`/api/admin/db/${selectedCollection}/${recordId}`, { method: 'DELETE', headers: { 'x-db-token': dbAccessToken } });
+      if (!res.ok) throw new Error('Failed to delete');
+      setDeletingId(null);
+      loadCollection(selectedCollection);
+      alert('Record deleted');
+    } catch (err) { console.error(err); alert('Delete failed'); }
+  };
+
+  if (!dbAccessToken) {
+    return (
+      <div style={{ ...box, padding: 40, textAlign: 'center', maxWidth: 400, margin: '40px auto' }}>
+        <Icon name="lock" size={48} style={{ color: C.muted, marginBottom: 16 }} />
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 8 }}>Database Access Locked</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Verify with OTP to access database management</div>
+        {dbOtpStep === 'idle' ? (
+          <button onClick={handleSendOtp} style={{ width: '100%', padding: '12px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: C.accent, color: isDark ? '#000' : '#fff' }}>
+            📱 Send OTP
+          </button>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <input placeholder="Enter OTP" value={dbOtpInput} onChange={e => setDbOtpInput(e.target.value)} maxLength={6} style={inp} />
+            <button onClick={handleVerifyOtp} disabled={dbOtpStep === 'sending'} style={{ width: '100%', padding: '12px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, background: C.accent, color: isDark ? '#000' : '#fff', opacity: dbOtpStep === 'sending' ? 0.6 : 1 }}>
+              {dbOtpStep === 'sending' ? 'Verifying...' : '✓ Verify'}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : '200px 1fr', gap: 16, padding: '20px 0' }}>
+      {/* Collections List */}
+      <div style={{ ...box, padding: 0, maxHeight: mob ? 300 : 600, overflowY: 'auto' }}>
+        {collections.map(col => (
+          <button key={col} onClick={() => loadCollection(col)} style={{
+            width: '100%', padding: 12, textAlign: 'left', border: 'none', cursor: 'pointer',
+            background: selectedCollection === col ? C.accentBg : 'transparent',
+            borderBottom: `1px solid ${C.border}`, transition: 'all 0.2s'
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{col}</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{records.length > 0 && selectedCollection === col ? `${records.length} records` : ''}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Records View */}
+      {selectedCollection ? (
+        <div style={{ ...box, padding: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>{selectedCollection} ({records.length})</div>
+          <div style={{ overflowX: 'auto', maxHeight: 500, overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${C.border}` }}>
+                  {records[0] && Object.keys(records[0]).slice(0, 4).map(key => (
+                    <th key={key} style={{ padding: 8, textAlign: 'left', fontSize: 11, fontWeight: 700, color: C.muted }}>{key}</th>
+                  ))}
+                  <th style={{ padding: 8, textAlign: 'center', fontSize: 11, fontWeight: 700, color: C.muted }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.border === '#27272A' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }}>
+                    {Object.entries(r).slice(0, 4).map(([k, v]) => (
+                      <td key={k} style={{ padding: 8, fontSize: 11, color: C.text, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {String(v).slice(0, 30)}
+                      </td>
+                    ))}
+                    <td style={{ padding: 8, textAlign: 'center', display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      <button onClick={() => handleEditRecord(r)} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', cursor: 'pointer', background: C.accent, color: isDark ? '#000' : '#fff', fontSize: 11, fontWeight: 700 }}>
+                        ✏️
+                      </button>
+                      <button onClick={() => setDeletingId(r.id)} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', cursor: 'pointer', background: '#EF4444', color: '#fff', fontSize: 11, fontWeight: 700 }}>
+                        🗑️
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div style={{ ...box, padding: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400, textAlign: 'center', color: C.muted }}>
+          Select a collection to view
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingRecord && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', padding: 16 }} onClick={() => setEditingRecord(null)}>
+          <div style={{ ...box, width: '100%', maxWidth: 600, maxHeight: '80vh', overflow: 'auto', padding: 24 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>Edit Record</div>
+            <textarea value={editJson} onChange={e => setEditJson(e.target.value)} style={{ ...inp, minHeight: 300, fontFamily: 'monospace', fontSize: 12, resize: 'none' }} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button onClick={() => handleSaveEdit(editingRecord)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', cursor: 'pointer', background: C.accent, color: isDark ? '#000' : '#fff', fontWeight: 700 }}>
+                Save
+              </button>
+              <button onClick={() => setEditingRecord(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', color: C.text, fontWeight: 700 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm */}
+      {deletingId && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', padding: 16 }} onClick={() => setDeletingId(null)}>
+          <div style={{ ...box, padding: 24, maxWidth: 300 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 8 }}>Delete Record?</div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>This action cannot be undone.</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => handleDeleteRecord(deletingId)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#EF4444', color: '#fff', fontWeight: 700 }}>
+                Delete
+              </button>
+              <button onClick={() => setDeletingId(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', color: C.text, fontWeight: 700 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

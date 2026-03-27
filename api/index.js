@@ -1086,6 +1086,19 @@ app.get('/api/support/tickets/:id', (req, res) => {
   return res.json(ticket);
 });
 
+// Get ticket suggestions by category
+app.get('/api/support/suggestions', (req, res) => {
+  const { category } = req.query;
+  const suggestions = {
+    delivery: ['Where is my delivery?', 'My delivery is late', 'Item was damaged', 'Wrong item delivered', 'Driver didn\'t arrive'],
+    payment: ['I was charged incorrectly', 'Request a refund', 'Payment failed', 'Duplicate charge', 'Receipt not received'],
+    account: ['Can\'t login to my account', 'Reset my password', 'Update my phone number', 'Delete my account', 'Profile not updating'],
+    other: ['I have a general question', 'Report a technical issue', 'Share feedback', 'Partnership inquiry', 'Other']
+  };
+  const result = suggestions[category] || suggestions.other;
+  return res.json({ suggestions: result });
+});
+
 app.post('/api/support/tickets', (req, res) => {
   const db = readDB();
   const { userId, subject, message, category } = req.body;
@@ -1105,8 +1118,17 @@ app.post('/api/support/tickets/:id/reply', (req, res) => {
   const db = readDB();
   const idx = db.supportTickets.findIndex(t => t.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Ticket not found' });
-  const { sender, message } = req.body;
-  db.supportTickets[idx].messages.push({ sender: sender || 'user', message, timestamp: new Date().toISOString() });
+  const { sender, message, type, voiceData } = req.body;
+  const newMessage = {
+    sender: sender || 'user',
+    type: type || 'text',
+    message: message || '',
+    timestamp: new Date().toISOString()
+  };
+  if (type === 'voice' && voiceData) {
+    newMessage.voiceData = voiceData;
+  }
+  db.supportTickets[idx].messages.push(newMessage);
   if (sender === 'admin') db.supportTickets[idx].status = 'in-progress';
   writeDB(db);
   return res.json(db.supportTickets[idx]);
@@ -1276,6 +1298,99 @@ app.post('/api/admin/refund', (req, res) => {
   }
   writeDB(db);
   return res.json({ success: true, refundedAmount: amount, booking: db.bookings[bIdx] });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  DATABASE MANAGEMENT (OTP Protected)
+// ═══════════════════════════════════════════════════════════════
+
+// Send OTP for database access (admin only)
+app.post('/api/admin/db-otp/send', (req, res) => {
+  const auth = req.headers.authorization?.split(' ')[1];
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const decoded = jwt.verify(auth, JWT_SECRET);
+    if (decoded.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const db = readDB();
+    const admin = db.admins.find(a => a.id === decoded.id);
+    if (!admin) return res.status(404).json({ error: 'Admin not found' });
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const clean = (admin.phone || '9999999999').replace(/\D/g, '');
+    otpStore[clean] = { otp, expiresAt: Date.now() + 5 * 60 * 1000 };
+    console.log(`[DB-OTP] ${clean}: ${otp}`);
+    return res.json({ success: true, message: 'OTP sent to registered phone' });
+  } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+});
+
+// Verify OTP and get database access token
+app.post('/api/admin/db-otp/verify', (req, res) => {
+  const auth = req.headers.authorization?.split(' ')[1];
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  const { phone, otp } = req.body;
+  if (!phone || !otp) return res.status(400).json({ error: 'phone and otp required' });
+  try {
+    const decoded = jwt.verify(auth, JWT_SECRET);
+    if (decoded.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const clean = phone.replace(/\D/g, '');
+    const stored = otpStore[clean];
+    if (!stored) return res.status(400).json({ error: 'OTP expired or not sent' });
+    if (Date.now() > stored.expiresAt) { delete otpStore[clean]; return res.status(400).json({ error: 'OTP expired' }); }
+    if (stored.otp !== otp) return res.status(400).json({ error: 'Invalid OTP' });
+    delete otpStore[clean];
+    const dbAccessToken = jwt.sign({ id: decoded.id, role: 'admin', purpose: 'db-access' }, JWT_SECRET, { expiresIn: '10m' });
+    return res.json({ success: true, dbAccessToken });
+  } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+});
+
+// Get all records from a collection (requires db access token)
+app.get('/api/admin/db/:collection', (req, res) => {
+  const dbToken = req.headers['x-db-token'];
+  if (!dbToken) return res.status(401).json({ error: 'DB access token required' });
+  try {
+    const decoded = jwt.verify(dbToken, JWT_SECRET);
+    if (decoded.role !== 'admin' || decoded.purpose !== 'db-access') return res.status(403).json({ error: 'Invalid token' });
+    const db = readDB();
+    const collection = req.params.collection;
+    if (!(collection in db)) return res.status(404).json({ error: 'Collection not found' });
+    return res.json({ [collection]: db[collection] });
+  } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+});
+
+// Update a record (requires db access token)
+app.put('/api/admin/db/:collection/:id', (req, res) => {
+  const dbToken = req.headers['x-db-token'];
+  if (!dbToken) return res.status(401).json({ error: 'DB access token required' });
+  try {
+    const decoded = jwt.verify(dbToken, JWT_SECRET);
+    if (decoded.role !== 'admin' || decoded.purpose !== 'db-access') return res.status(403).json({ error: 'Invalid token' });
+    const db = readDB();
+    const { collection, id } = req.params;
+    if (!(collection in db)) return res.status(404).json({ error: 'Collection not found' });
+    const idx = db[collection].findIndex(r => r.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Record not found' });
+    Object.assign(db[collection][idx], req.body);
+    writeDB(db);
+    return res.json({ success: true, updated: db[collection][idx] });
+  } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
+});
+
+// Delete a record (requires db access token)
+app.delete('/api/admin/db/:collection/:id', (req, res) => {
+  const dbToken = req.headers['x-db-token'];
+  if (!dbToken) return res.status(401).json({ error: 'DB access token required' });
+  try {
+    const decoded = jwt.verify(dbToken, JWT_SECRET);
+    if (decoded.role !== 'admin' || decoded.purpose !== 'db-access') return res.status(403).json({ error: 'Invalid token' });
+    const db = readDB();
+    const { collection, id } = req.params;
+    if (!(collection in db)) return res.status(404).json({ error: 'Collection not found' });
+    const idx = db[collection].findIndex(r => r.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Record not found' });
+    const deleted = db[collection][idx];
+    db[collection].splice(idx, 1);
+    writeDB(db);
+    return res.json({ success: true, deleted });
+  } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
 });
 
 // ═══════════════════════════════════════════════════════════════

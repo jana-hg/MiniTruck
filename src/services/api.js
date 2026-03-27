@@ -105,6 +105,7 @@ export const support = {
   getTicket: (id) => api.get(`/support/tickets/${id}`).then(r => r.data),
   createTicket: (data) => api.post('/support/tickets', data).then(r => r.data),
   replyTicket: (id, data) => api.post(`/support/tickets/${id}/reply`, data).then(r => r.data),
+  getSuggestions: (category) => api.get('/support/suggestions', { params: { category } }).then(r => r.data),
 };
 
 // ── Pricing ──
