@@ -26,6 +26,7 @@ import Support from './pages/customer/Support';
 import DriverHome from './pages/driver/DriverHome';
 import DriverEarnings from './pages/driver/DriverEarnings';
 import DriverProfile from './pages/driver/DriverProfile';
+import DriverSupport from './pages/driver/DriverSupport';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
 import FleetManagement from './pages/admin/FleetManagement';
@@ -87,6 +88,7 @@ function AppRoutes() {
               <Route path="/driver" element={<ProtectedRoute allowedRoles={['driver']}><DriverHome /></ProtectedRoute>} />
               <Route path="/earnings" element={<ProtectedRoute allowedRoles={['driver']}><DriverEarnings /></ProtectedRoute>} />
               <Route path="/driver/profile" element={<ProtectedRoute allowedRoles={['driver']}><DriverProfile /></ProtectedRoute>} />
+              <Route path="/driver/support" element={<ProtectedRoute allowedRoles={['driver']}><DriverSupport /></ProtectedRoute>} />
 
               {/* Admin */}
               <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />

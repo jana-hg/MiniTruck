@@ -14,6 +14,7 @@ const NAV = {
   driver: [
     { to: '/driver', icon: 'dashboard', label: 'Home' },
     { to: '/earnings', icon: 'payments', label: 'Earnings' },
+    { to: '/driver/support', icon: 'support_agent', label: 'Support' },
     { to: '/driver/profile', icon: 'person', label: 'Profile' },
   ],
   admin: [],
