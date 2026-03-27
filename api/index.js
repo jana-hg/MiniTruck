@@ -3,7 +3,8 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid'); // SECURITY FIX: Use proper uuid library
+const crypto = require('crypto');
+const uuidv4 = () => crypto.randomUUID();
 const fs = require('fs');
 const path = require('path');
 const helmet = require('helmet');
@@ -1419,5 +1420,4 @@ app.get('/api/route', async (req, res) => {
   } catch (err) { return res.status(502).json({ error: 'Routing failed', details: err.message }); }
 });
 
-// Export for Vercel serverless
 module.exports = app;
