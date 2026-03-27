@@ -163,19 +163,14 @@ function requireAuth(req, res, next) {
     '/api/auth/lookup-phone',
     '/api/auth/reset-password',
     '/api/otp/send',
-    '/api/otp/verify',
-    '/api/pricing/estimate',
-    '/api/pricing/config',
-    '/api/geocode',
-    '/api/route'
+    '/api/otp/verify'
   ];
 
   // Exact matches
   if (publicRoutes.includes(req.path)) return next();
   
-  // Method-specific public endpoints for registration / info fetching
+  // Method-specific public endpoints for registration 
   if (req.method === 'POST' && (req.path === '/api/users' || req.path === '/api/drivers')) return next();
-  if (req.method === 'GET' && req.path === '/api/trucks') return next();
   
   // Otherwise, strict authentication required
   const header = req.headers.authorization;
