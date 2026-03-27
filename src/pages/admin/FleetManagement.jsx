@@ -52,18 +52,25 @@ export default function FleetManagement() {
     shadow: isDark ? '0 4px 20px rgba(0,0,0,0.4)' : '0 1px 3px rgba(0,0,0,0.08)',
   };
 
+  const [mob, setMob] = useState(window.innerWidth < 1024);
+  useEffect(() => {
+    const h = () => setMob(window.innerWidth < 1024);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+
   return (
     <div style={{ minHeight: '100vh', background: C.bg }}>
       {/* ═══ HEADER ═══ */}
-      <header style={{ background: C.headerBg, borderBottom: `1px solid ${C.border}`, boxShadow: C.shadow, height: 70, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', position: 'sticky', top: 0, zIndex: 30 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <header style={{ background: C.headerBg, borderBottom: `1px solid ${C.border}`, boxShadow: C.shadow, height: 70, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: mob ? '0 12px' : '0 24px', position: 'sticky', top: 0, zIndex: 30 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: mob ? 8 : 16 }}>
           <Link to="/admin" style={{ textDecoration: 'none', width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#18181B' : '#F1F5F9', color: C.sub }}>
             <Icon name="arrow_back" size={20} />
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AppIcon size={38} />
+            {!mob && <AppIcon size={38} />}
             <div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: C.text }}>Fleet Map</div>
+              <div style={{ fontSize: mob ? 15 : 17, fontWeight: 800, color: C.text }}>Fleet Map</div>
               <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.12em' }}>{activeCount} active · {fleetData.length} total</div>
             </div>
           </div>
@@ -80,7 +87,7 @@ export default function FleetManagement() {
       </header>
 
       {/* ═══ CONTENT ═══ */}
-      <div style={{ padding: '32px 24px 48px', maxWidth: 1600, margin: '0 auto' }}>
+      <div style={{ padding: mob ? '20px 12px 60px' : '32px 24px 48px', maxWidth: 1600, margin: '0 auto' }}>
 
         {/* Search + Filter */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -89,10 +96,10 @@ export default function FleetManagement() {
             <input type="text" placeholder="Search vehicle ID..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               style={{ width: '100%', padding: '10px 12px 10px 40px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontSize: 13, outline: 'none' }} />
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
             {FILTERS.map(f => (
               <button key={f} onClick={() => setScaleFilter(f)}
-                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, transition: 'all 0.15s', background: scaleFilter === f ? C.accent : (isDark ? '#18181B' : '#F1F5F9'), color: scaleFilter === f ? (isDark ? '#000' : '#fff') : C.sub }}>
+                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, transition: 'all 0.15s', background: scaleFilter === f ? C.accent : (isDark ? '#18181B' : '#F1F5F9'), color: scaleFilter === f ? (isDark ? '#000' : '#fff') : C.sub, whiteSpace: 'nowrap' }}>
                 {f}
               </button>
             ))}
@@ -100,16 +107,16 @@ export default function FleetManagement() {
         </div>
 
         {/* Map + Vehicle Detail */}
-        <div style={{ display: 'grid', gridTemplateColumns: selectedVehicle ? '2fr 1fr' : '1fr', gap: 16, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: selectedVehicle && !mob ? '2fr 1fr' : '1fr', gap: 16, marginBottom: 24 }}>
           {/* Map */}
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', boxShadow: C.shadow }}>
-            <div style={{ height: selectedVehicle ? 400 : 450 }}>
+            <div style={{ height: mob ? 350 : (selectedVehicle ? 400 : 450) }}>
               <MapView
-                center={selectedVehicle?.location ? [selectedVehicle.location.lat, selectedVehicle.location.lng] : [41.87, -87.63]}
-                zoom={selectedVehicle ? 8 : 10}
+                center={selectedVehicle?.location ? [selectedVehicle.location.lat, selectedVehicle.location.lng] : [19.076, 72.877]}
+                zoom={selectedVehicle ? 14 : 11}
                 markers={selectedVehicle
-                  ? [{ lat: selectedVehicle.location?.lat || 41.87, lng: selectedVehicle.location?.lng || -87.63, icon: createFleetActiveIcon() }]
-                  : filtered.map(f => ({ lat: f.location?.lat || 41.87, lng: f.location?.lng || -87.63, icon: (f.status === 'active' || f.status === 'on-trip') ? createFleetActiveIcon() : createFleetIdleIcon() }))
+                  ? [{ lat: selectedVehicle.location?.lat || 19.07, lng: selectedVehicle.location?.lng || 72.87, icon: createFleetActiveIcon() }]
+                  : filtered.map(f => ({ lat: f.location?.lat || 19.07, lng: f.location?.lng || 72.87, icon: (f.status === 'active' || f.status === 'on-trip') ? createFleetActiveIcon() : createFleetIdleIcon() }))
                 }
                 origin={selBookings[0]?.pickup?.lat ? [selBookings[0].pickup.lat, selBookings[0].pickup.lng] : null}
                 destination={selBookings[0]?.dropoff?.lat ? [selBookings[0].dropoff.lat, selBookings[0].dropoff.lng] : null}
@@ -135,7 +142,7 @@ export default function FleetManagement() {
           {/* Selected Vehicle Detail Panel */}
           <AnimatePresence>
             {selectedVehicle && (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+              <motion.div initial={{ opacity: 0, y: mob ? 20 : 0, x: mob ? 0 : 20 }} animate={{ opacity: 1, y: 0, x: 0 }} exit={{ opacity: 0, y: mob ? 20 : 0, x: mob ? 0 : 20 }}
                 style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', boxShadow: C.shadow, display: 'flex', flexDirection: 'column' }}>
                 {/* Header */}
                 <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -235,7 +242,7 @@ export default function FleetManagement() {
               <thead>
                 <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.rowAlt }}>
                   {['Vehicle ID', 'Type', 'Driver', 'Status', 'Health', 'Location'].map(h => (
-                    <th key={h} style={{ padding: '10px 20px', fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'left' }}>{h}</th>
+                    <th key={h} style={{ padding: mob ? '10px 12px' : '10px 20px', fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'left' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -251,19 +258,19 @@ export default function FleetManagement() {
                         background: isSel ? (isDark ? 'rgba(255,215,0,0.06)' : '#EFF6FF') : (i % 2 === 0 ? C.rowAlt : 'transparent'),
                         borderLeft: isSel ? `3px solid ${C.accent}` : '3px solid transparent',
                       }}>
-                      <td style={{ padding: '12px 20px', fontSize: 13, fontWeight: 600, color: C.text }}>{f.id}</td>
-                      <td style={{ padding: '12px 20px', fontSize: 13, color: C.sub, textTransform: 'uppercase' }}>{f.type}</td>
-                      <td style={{ padding: '12px 20px', fontSize: 13, color: C.text }}>{driver?.name || '--'}</td>
-                      <td style={{ padding: '12px 20px' }}><StatusBadge status={f.status === 'on-trip' ? 'in-transit' : f.status} /></td>
-                      <td style={{ padding: '12px 20px' }}>
+                      <td style={{ padding: mob ? '12px 12px' : '12px 20px', fontSize: 13, fontWeight: 600, color: C.text }}>{f.id}</td>
+                      <td style={{ padding: mob ? '12px 12px' : '12px 20px', fontSize: 13, color: C.sub, textTransform: 'uppercase' }}>{f.type}</td>
+                      <td style={{ padding: mob ? '12px 12px' : '12px 20px', fontSize: 13, color: C.text }}>{driver?.name || '--'}</td>
+                      <td style={{ padding: mob ? '12px 12px' : '12px 20px' }}><StatusBadge status={f.status === 'on-trip' ? 'in-transit' : f.status} /></td>
+                      <td style={{ padding: mob ? '12px 12px' : '12px 20px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <div style={{ flex: 1, height: 5, borderRadius: 3, background: isDark ? '#27272A' : '#F1F5F9', overflow: 'hidden', maxWidth: 80 }}>
                             <div style={{ height: '100%', borderRadius: 3, width: `${f.health || 0}%`, background: (f.health || 0) > 80 ? '#10B981' : (f.health || 0) > 50 ? '#F59E0B' : '#EF4444' }} />
                           </div>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{f.health || 0}%</span>
+                          {!mob && <span style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{f.health || 0}%</span>}
                         </div>
                       </td>
-                      <td style={{ padding: '12px 20px', fontSize: 10, color: C.muted }}>{f.location?.lat?.toFixed(3)}, {f.location?.lng?.toFixed(3)}</td>
+                      <td style={{ padding: mob ? '12px 12px' : '12px 20px', fontSize: 10, color: C.muted }}>{f.location?.lat?.toFixed(3)}, {f.location?.lng?.toFixed(3)}</td>
                     </tr>
                   );
                 })}
