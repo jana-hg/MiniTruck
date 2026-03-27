@@ -51,16 +51,9 @@ const DB_PATH = TMP_DB_PATH;
 
 // ── Security middleware ──
 app.use(helmet({ contentSecurityPolicy: false }));
-// SECURITY FIX: Restrict CORS to specific origins instead of allowing all
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3000').split(',');
+// Allow all origins to enable APK and Web access without throwing 500 Server Errors
 app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-      cb(null, true);
-    } else {
-      cb(new Error('CORS denied: ' + origin));
-    }
-  },
+  origin: true,
   credentials: true
 }));
 app.use(bodyParser.json({ limit: '1mb' }));
