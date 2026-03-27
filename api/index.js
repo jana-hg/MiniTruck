@@ -309,37 +309,48 @@ app.post('/api/auth/biometric/authenticate', async (req, res) => {
 //  AUTH
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/auth/login', async (req, res) => {
-  const { id, password, role } = req.body;
-  if (!id || !password || !role) return res.status(400).json({ error: 'id, password and role are required' });
-  const db = readDB();
-  let user = null;
-  if (role === 'customer') user = db.users.find(u => u.id === id || u.email === id || u.phone === id || u.phone === `+91${id}`);
-  else if (role === 'driver') user = db.drivers.find(d => d.id === id);
-  else if (role === 'admin') user = db.admins.find(a => a.id === id || a.name === id);
-  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+  try {
+    const { id, password, role } = req.body;
+    if (!id || !password || !role) return res.status(400).json({ error: 'id, password and role are required' });
+    const db = readDB();
+    let user = null;
+    if (role === 'customer') user = db.users.find(u => u.id === id || u.email === id || u.phone === id || u.phone === `+91${id}`);
+    else if (role === 'driver') user = db.drivers.find(d => d.id === id);
+    else if (role === 'admin') user = db.admins.find(a => a.id === id || a.name === id);
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-  // DRIVER VERIFICATION: Check RC and photo verification before allowing login
-  if (role === 'driver') {
-    const docVerif = user.documentVerification || {};
-    if (!docVerif.rc || !docVerif.rc.verified) {
-      return res.status(403).json({ error: 'Your Registration Certificate (RC) is pending verification. Please wait for admin approval.' });
-    }
-    if (!docVerif.profilePhoto || !docVerif.profilePhoto.verified) {
-      return res.status(403).json({ error: 'Your profile photo is pending verification. Please wait for admin approval.' });
-    }
-  }
+    // Verify password first (before document checks)
+    const valid = user.password && user.password.startsWith('$2') ? await bcrypt.compare(password, user.password) : password === user.password;
+    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
-  if (role === 'driver' && user.approved === false && user.status === 'pending-approval') {
-    return res.status(403).json({ error: 'Your account is pending approval' });
+    // DRIVER VERIFICATION: Check RC and photo verification before allowing login
+    if (role === 'driver') {
+      const docVerif = user.documentVerification || {};
+      // Only block if documentVerification field exists and documents are not verified
+      if (user.documentVerification) {
+        if (!docVerif.rc?.verified) {
+          return res.status(403).json({ error: 'Your Registration Certificate (RC) is pending verification. Please wait for admin approval.' });
+        }
+        if (!docVerif.profilePhoto?.verified) {
+          return res.status(403).json({ error: 'Your profile photo is pending verification. Please wait for admin approval.' });
+        }
+      }
+    }
+
+    if (role === 'driver' && user.approved === false && user.status === 'pending-approval') {
+      return res.status(403).json({ error: 'Your account is pending approval' });
+    }
+    if (role === 'driver' && user.status === 'rejected') {
+      return res.status(403).json({ error: 'Your application was rejected' });
+    }
+
+    const token = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: '8h' });
+    const { password: _, ...safeUser } = user;
+    return res.json({ token, user: safeUser, role });
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(500).json({ error: 'Server error during login. Please try again.' });
   }
-  if (role === 'driver' && user.status === 'rejected') {
-    return res.status(403).json({ error: 'Your application was rejected' });
-  }
-  const valid = user.password.startsWith('$2') ? await bcrypt.compare(password, user.password) : password === user.password;
-  if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-  const token = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: '8h' });
-  const { password: _, ...safeUser } = user;
-  return res.json({ token, user: safeUser, role });
 });
 
 // Helper: find user by phone
