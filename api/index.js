@@ -210,6 +210,18 @@ app.post('/api/otp/verify', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+//  HEALTH CHECK
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/health', (_, res) => {
+  try {
+    const db = readDB();
+    res.json({ status: 'ok', database: 'connected', users: db.users?.length || 0, drivers: db.drivers?.length || 0 });
+  } catch (e) {
+    res.status(503).json({ status: 'error', message: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 //  BIOMETRIC AUTH (WebAuthn)
 // ═══════════════════════════════════════════════════════════════
 const biometricChallenges = {}; // In-memory challenges (short-lived, acceptable)
@@ -1432,8 +1444,18 @@ app.get('/api/route', async (req, res) => {
   } catch (err) { return res.status(502).json({ error: 'Routing failed', details: err.message }); }
 });
 
-// Export for Vercel serverless
-module.exports = app;
+// Export for Vercel serverless - wrap app as handler
+module.exports = (req, res) => {
+  // Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-// Also export as handler for Vercel functions
-module.exports.handler = app;
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  // Route through Express app
+  return app(req, res);
+};
