@@ -25,7 +25,6 @@ const TABS = [
   { id: 'payments', icon: 'account_balance_wallet', label: 'Payments', color: '#06B6D4', dark: '#22D3EE' },
   { id: 'support', icon: 'support_agent', label: 'Support', color: '#8B5CF6', dark: '#C084FC' },
   { id: 'database', icon: 'storage', label: 'Database', color: '#EF4444', dark: '#F87171' },
-  { id: 'fleet', icon: 'map', label: 'Live Fleet', color: '#10B981', dark: '#34D399' },
 ];
 
 export default function AdminDashboard() {
@@ -143,6 +142,21 @@ export default function AdminDashboard() {
 
         {/* Right: Fleet Map + Theme + Profile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Fleet Map Button (Link to separate page) */}
+          <Link to="/fleet"
+            style={{
+              width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', border: `1px solid ${isDark ? 'rgba(16,185,129,0.2)' : '#E2E8F0'}`,
+              background: isDark ? 'rgba(16,185,129,0.08)' : '#F8FAFC', 
+              color: '#10B981',
+              marginRight: 4,
+              textDecoration: 'none'
+            }}
+            title="Open Live Fleet Map"
+          >
+            <Icon name="map" size={18} />
+          </Link>
+
           {/* Theme toggle */}
           <button onClick={toggleTheme}
             style={{
@@ -347,7 +361,7 @@ export default function AdminDashboard() {
             {activeTab === 'payments' && <PaymentsTab {...tabData.payments} C={C} isDark={isDark} mob={mob} />}
             {activeTab === 'support' && <SupportTab {...tabData.support} C={C} isDark={isDark} mob={mob} selectedTicket={selectedTicket} setSelectedTicket={setSelectedTicket} ticketReply={ticketReply} setTicketReply={setTicketReply} ticketReplying={ticketReplying} setTicketReplying={setTicketReplying} ticketRecording={ticketRecording} setTicketRecording={setTicketRecording} mediaRecorderRef={mediaRecorderRef} audioChunksRef={audioChunksRef} supportApi={supportApi} setSupportTickets={setSupportTickets} />}
             {activeTab === 'database' && <DatabaseTab C={C} isDark={isDark} mob={mob} user={user} dbAccessToken={dbAccessToken} setDbAccessToken={setDbAccessToken} dbOtpStep={dbOtpStep} setDbOtpStep={setDbOtpStep} dbOtpInput={dbOtpInput} setDbOtpInput={setDbOtpInput} />}
-            {activeTab === 'fleet' && <FleetTab fleetData={fleetData} driversList={driversList} bookings={bookings} C={C} isDark={isDark} mob={mob} />}
+
           </motion.div>
         </AnimatePresence>
       </div>
@@ -510,89 +524,7 @@ function OverviewTab({ bookings, driversList, trucksList, paymentsList, fleetDat
         {bookings.length === 0 && <div style={{ padding: '48px 0', textAlign: 'center', fontSize: 13, color: C.muted }}>No rides</div>}
       </Box>
 
-      {/* Live Fleet Map */}
-      <div id="fleet-map-section" />
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} transition={{ duration: 0.3 }}>
-        <div style={{ borderRadius: mob ? 12 : 16, overflow: 'hidden', border: `1px solid ${isDark ? '#27272A' : '#E2E8F0'}`, background: isDark ? '#18181B' : '#fff', boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.08)' }}>
-          {/* Map Header */}
-          <div style={{ padding: mob ? '10px 12px' : '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: isDark ? 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.05))' : 'linear-gradient(135deg, #ECFDF5, #F0F9FF)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#10B981', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>
-                <Icon name="satellite_alt" filled size={14} style={{ color: '#fff' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: mob ? 12 : 13, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {selectedDriver ? selectedDriver.name : 'Live Fleet Map'}
-                  <span style={{ width: 6, height: 6, borderRadius: 3, background: '#10B981', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-                </div>
-                <div style={{ fontSize: mob ? 9 : 10, color: C.muted, marginTop: 1 }}>
-                  {selectedDriver ? `${driverBookings.length} active route(s)` : `${fleetData.filter(f => f.status === 'active' || f.status === 'on-trip').length} active · ${fleetData.length} total`}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              {selectedDriver && (
-                <button onClick={() => setSelectedDriver(null)}
-                  style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: '#10B981', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6 }}>
-                  All
-                </button>
-              )}
-            </div>
-          </div>
 
-          {/* Selected driver info bar */}
-          {selectedDriver && (
-            <div style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, background: isDark ? 'rgba(255,215,0,0.04)' : '#FFFBEB', borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ width: 20, height: 20, borderRadius: 10, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="person" filled size={10} style={{ color: isDark ? '#000' : '#fff' }} />
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 600, color: C.text }}>{selectedDriver.name}</span>
-              <span style={{ fontSize: 9, color: C.muted }}>·</span>
-              <span style={{ fontSize: 9, color: C.muted }}>{selectedDriver.status}</span>
-              {selectedDriver.rating > 0 && <>
-                <span style={{ fontSize: 9, color: C.muted }}>·</span>
-                <span style={{ fontSize: 9, fontWeight: 700, color: isDark ? '#FFD700' : '#F59E0B' }}>★ {selectedDriver.rating}</span>
-              </>}
-            </div>
-          )}
-
-          {/* Map */}
-          <div style={{ height: mob ? 260 : 380, position: 'relative' }}>
-            <MapView
-              center={selectedDriver?.location ? [selectedDriver.location.lat, selectedDriver.location.lng] : [19.065, 72.878]}
-              zoom={selectedDriver ? 14 : 12}
-              markers={selectedDriver
-                ? [...(selectedDriver.location ? [{ lat: selectedDriver.location.lat, lng: selectedDriver.location.lng, icon: createFleetActiveIcon() }] : [])]
-                : fleetData.map(f => ({ lat: f.location?.lat || 19.07, lng: f.location?.lng || 72.87, icon: (f.status === 'active' || f.status === 'on-trip') ? createFleetActiveIcon() : createFleetIdleIcon() }))
-              }
-              origin={driverBookings[0]?.pickup?.lat ? [driverBookings[0].pickup.lat, driverBookings[0].pickup.lng] : null}
-              destination={driverBookings[0]?.dropoff?.lat ? [driverBookings[0].dropoff.lat, driverBookings[0].dropoff.lng] : null}
-              showLocate={false} className="w-full h-full"
-            />
-            {/* Legend overlay */}
-            <div style={{ position: 'absolute', bottom: 8, left: 8, zIndex: 500, background: isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.95)', borderRadius: 8, padding: '5px 10px', display: 'flex', gap: 10, fontSize: 9, fontWeight: 700, border: `1px solid ${C.border}`, backdropFilter: 'blur(10px)' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: 4, background: '#10B981', boxShadow: '0 0 4px rgba(16,185,129,0.5)' }} /> Active</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: 4, background: '#94A3B8' }} /> Idle</span>
-            </div>
-          </div>
-
-          {/* Driver routes list */}
-          {selectedDriver && driverBookings.length > 0 && (
-            <div style={{ borderTop: `1px solid ${C.border}`, maxHeight: 80, overflowY: 'auto' }}>
-              {driverBookings.map(b => (
-                <div key={b.id} style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}`, fontSize: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
-                    <Icon name="route" size={12} style={{ color: '#10B981', flexShrink: 0 }} />
-                    <span style={{ fontWeight: 600, color: C.text }}>{b.id}</span>
-                    {!mob && <span style={{ color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.pickup?.address} → {b.dropoff?.address}</span>}
-                  </div>
-                  <StatusBadge status={b.status} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </motion.div>
 
       {/* Payments + Drivers */}
       <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : '1fr 1fr', gap: 16 }}>
@@ -1421,101 +1353,7 @@ function PricingTab_unused({ C, isDark, mob }) {
   );
 }
 
-/* ═══ Live Fleet Map Tab ═══ */
-function FleetTab({ fleetData, driversList, bookings, C, isDark, mob }) {
-  const [selectedDriver, setSelectedDriver] = useState(null);
-  const driverBookings = selectedDriver ? bookings.filter(b => b.driverId === selectedDriver.id) : [];
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: mob ? '1fr' : '1fr 2.5fr', gap: 20 }}>
-        {/* Driver List sidebar */}
-        <Box C={C} s={{ maxHeight: mob ? '300px' : '700px', overflowY: 'auto' }}>
-          <BoxHead title="Drivers" icon="badge" C={C} right={`${driversList.length} Online`} />
-          {driversList.map(d => {
-            const isSelected = selectedDriver?.id === d.id;
-            const liveInfo = fleetData.find(f => f.driverId === d.id);
-            const status = liveInfo?.status || d.status;
-            return (
-              <div key={d.id}
-                onClick={() => setSelectedDriver(isSelected ? null : d)}
-                style={{
-                  padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  borderBottom: `1px solid ${C.border}`, cursor: 'pointer', transition: 'all 0.15s',
-                  background: isSelected ? (isDark ? 'rgba(59,130,246,0.1)' : '#EFF6FF') : 'transparent',
-                  borderLeft: isSelected ? `4px solid ${isDark ? '#FFD700' : '#3B82F6'}` : '4px solid transparent',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ position: 'relative' }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 10, background: isDark ? '#27272A' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon name="person" filled={isSelected} size={18} style={{ color: isSelected ? (isDark ? '#FFD700' : '#3B82F6') : C.sub }} />
-                    </div>
-                    <div style={{ position: 'absolute', bottom: -2, right: -2, width: 10, height: 10, borderRadius: 5, background: status === 'active' || status === 'on-trip' ? '#10B981' : '#94A3B8', border: `2px solid ${C.card}` }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{d.name}</div>
-                    <div style={{ fontSize: 10, color: C.muted, textTransform: 'capitalize' }}>{status}</div>
-                  </div>
-                </div>
-                {isSelected && <Icon name="my_location" size={14} style={{ color: isDark ? '#FFD700' : '#3B82F6' }} />}
-              </div>
-            );
-          })}
-        </Box>
-
-        {/* Map area */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Box C={C} s={{ height: mob ? 400 : 600, position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 500, background: isDark ? 'rgba(24,24,27,0.85)' : 'rgba(255,255,255,0.85)', padding: '6px 12px', borderRadius: 8, backdropFilter: 'blur(8px)', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Icon name="satellite_alt" size={14} style={{ color: '#10B981' }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>
-                {selectedDriver ? `Tracking: ${selectedDriver.name}` : 'Real-time Fleet Live View'}
-              </span>
-            </div>
-            <MapView
-              center={selectedDriver?.location ? [selectedDriver.location.lat, selectedDriver.location.lng] : [19.076, 72.877]}
-              zoom={selectedDriver ? 15 : 12}
-              markers={selectedDriver
-                ? [{ lat: selectedDriver.location?.lat || 19.07, lng: selectedDriver.location?.lng || 72.87, icon: createFleetActiveIcon() }]
-                : fleetData.map(f => ({ lat: f.location?.lat || 19.07, lng: f.location?.lng || 72.87, icon: (f.status === 'active' || f.status === 'on-trip') ? createFleetActiveIcon() : createFleetIdleIcon() }))
-              }
-              showLocate={false}
-              className="w-full h-full"
-            />
-            {/* Legend overlay */}
-            <div style={{ position: 'absolute', bottom: 12, right: 12, zIndex: 500, background: isDark ? 'rgba(24,24,27,0.85)' : 'rgba(255,255,255,0.85)', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', gap: 12, fontSize: 10, fontWeight: 600 }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#10B981' }} /> Active</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#94A3B8' }} /> Idle</span>
-            </div>
-          </Box>
-
-          {selectedDriver && driverBookings.length > 0 && (
-            <Box C={C}>
-              <BoxHead title="Driver Active Routes" icon="route" C={C} />
-              <div style={{ padding: '0 16px' }}>
-                {driverBookings.map(b => (
-                  <div key={b.id} style={{ padding: '12px 0', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 6, background: `${isDark ? '#FFD700' : '#3B82F6'}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Icon name="local_shipping" size={16} style={{ color: isDark ? '#FFD700' : '#3B82F6' }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{b.id}</div>
-                        <div style={{ fontSize: 11, color: C.sub }}>{b.pickup?.address?.slice(0, 30)}...</div>
-                      </div>
-                    </div>
-                    <StatusBadge status={b.status} />
-                  </div>
-                ))}
-              </div>
-            </Box>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════════════════════════════
 //  SUPPORT TAB

@@ -8,7 +8,7 @@ import { DataSyncProvider } from './context/DataSyncContext';
 import Header from './components/layout/Header';
 import BottomNav from './components/layout/BottomNav';
 import SplashScreen from './components/SplashScreen';
-import SyncStatusIndicator from './components/SyncStatusIndicator';
+
 
 import PortalSwitcher from './pages/auth/PortalSwitcher';
 import LoginScreen from './pages/auth/LoginScreen';
@@ -52,7 +52,7 @@ function AppRoutes() {
   return (
     <>
       <SplashScreen />
-      <SyncStatusIndicator />
+
       <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--on-surface)' }}>
         {!isAdminRoute && !isAuthRoute && <Header />}
 
