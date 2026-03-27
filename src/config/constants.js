@@ -1,4 +1,18 @@
-export const API_BASE = '/api';
+// For web: use relative path (same domain)
+// For APK: use absolute URL to backend server
+const isNative = () => {
+  try {
+    return window.location.href.startsWith('capacitor://');
+  } catch {
+    return false;
+  }
+};
+
+// APK needs to connect to backend server
+// For development: http://192.168.x.x:5005/api
+// For production: https://your-backend-server.com/api
+const BACKEND_URL = import.meta.env.VITE_API_BASE || (isNative() ? 'http://localhost:5005/api' : '/api');
+export const API_BASE = BACKEND_URL;
 
 export const MOCK_CREDENTIALS = {
   customer: { id: '9876543210', password: '1234' },

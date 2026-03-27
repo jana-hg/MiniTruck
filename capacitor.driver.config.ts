@@ -6,6 +6,10 @@ const config: CapacitorConfig = {
   webDir: 'dist-driver',
   server: {
     androidScheme: 'https',
+    // For development: connect to local backend
+    // Change to your actual backend server IP/URL
+    url: 'http://localhost:5005',
+    cleartext: true,
   },
   android: {
     path: 'android-driver',
