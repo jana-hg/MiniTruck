@@ -16,7 +16,9 @@ export async function initializeSocket(token, userId, role) {
   return new Promise((resolve, reject) => {
     try {
       // Get server URL
-      const SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:5005';
+      const isProd = import.meta.env.PROD;
+      const SERVER_URL = import.meta.env.VITE_API_URL || 
+                         (isProd ? 'https://minitruck-app.vercel.app' : 'http://localhost:5005');
 
       socket = io(SERVER_URL, {
         auth: { token, userId, role },

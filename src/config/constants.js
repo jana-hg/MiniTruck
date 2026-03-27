@@ -14,24 +14,23 @@ const isNative = () => {
 // 3. For APK: throw error if not set (avoid localhost which doesn't work on devices)
 const getBackendURL = () => {
   const envUrl = import.meta.env.VITE_API_BASE;
+  const isProd = import.meta.env.PROD;
 
-  if (envUrl) {
-    return envUrl; // Use env variable if set
+  // 1. Use env variable if explicitly set (even in dev)
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
   }
 
-  if (isNative()) {
-    // APK must have VITE_API_BASE set - localhost doesn't work on devices
-    console.error('❌ CRITICAL: APK is missing VITE_API_BASE environment variable');
-    console.error('   Set it in .env.customer or .env.driver before building APK');
-    throw new Error('APK missing backend URL. Set VITE_API_BASE in .env.customer or .env.driver');
+  // 2. If it is a native APK or production build, use the Vercel URL
+  if (isNative() || isProd) {
+    return 'https://minitruck-app.vercel.app/api';
   }
 
-  // Web uses relative path (proxied in vite.config.js)
+  // 3. Fallback for local development
   return '/api';
 };
 
-const BACKEND_URL = getBackendURL();
-export const API_BASE = BACKEND_URL;
+export const API_BASE = getBackendURL();
 
 export const MOCK_CREDENTIALS = {
   customer: { id: '9876543210', password: '1234', label: 'Rajesh Kumar' },
