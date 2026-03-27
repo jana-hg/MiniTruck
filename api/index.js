@@ -149,46 +149,20 @@ function authenticate(req, res, next) {
   catch { return res.status(401).json({ error: 'Invalid token' }); }
 }
 
-// Strict authentication middleware
-function requireAuth(req, res, next) {
-  // Public routes that do not require authentication
-  const publicRoutes = [
-    '/api/health',
-    '/api/auth/login',
-    '/api/auth/login-otp',
-    '/api/auth/verify-otp-token',
-    '/api/auth/biometric-login',
-    '/api/auth/biometric/register-challenge',
-    '/api/auth/biometric/auth-challenge',
-    '/api/auth/lookup-phone',
-    '/api/auth/reset-password',
-    '/api/otp/send',
-    '/api/otp/verify'
-  ];
-
-  // Exact matches
-  if (publicRoutes.includes(req.path)) return next();
-  
-  // Method-specific public endpoints for registration 
-  if (req.method === 'POST' && (req.path === '/api/users' || req.path === '/api/drivers')) return next();
-  
-  // Otherwise, strict authentication required
+// Optional auth - attaches user if token present, continues if not
+function optionalAuth(req, res, next) {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authentication required. No valid token provided.' });
+  if (header && header.startsWith('Bearer ')) {
+    try { 
+      const token = header.split(' ')[1];
+      req.user = jwt.verify(token, JWT_SECRET); 
+    } catch {}
   }
-
-  try {
-    const token = header.split(' ')[1];
-    req.user = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token. Please log in again.' });
-  }
+  next();
 }
 
-// Apply strict authentication to all endpoints globally
-app.use(requireAuth);
+// Apply optional auth (won't block direct browser visits)
+app.use(optionalAuth);
 
 function generateBookingId() {
   const num = Math.floor(1000 + Math.random() * 9000);
