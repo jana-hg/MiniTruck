@@ -15,7 +15,8 @@
     "cap:copy:customer": "npx cap copy --config=capacitor.customer.config.ts",
     "cap:copy:driver": "npx cap copy --config=capacitor.driver.config.ts",
     "cap:build:customer": "npm run build:customer && npm run cap:copy:customer",
-    "cap:build:driver": "npm run build:driver && npm run cap:copy:driver"
+    "cap:build:driver": "npm run build:driver && npm run cap:copy:driver",
+    "watch:all": "node scripts/watch-and-build.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.0",
