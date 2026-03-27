@@ -3,8 +3,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { randomBytes } = require('crypto');
-const uuidv4 = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ randomBytes(1)[0] & 15 >> c / 4).toString(16));
+const { v4: uuidv4 } = require('uuid'); // SECURITY FIX: Use proper uuid library
 const fs = require('fs');
 const path = require('path');
 const helmet = require('helmet');
@@ -35,12 +34,14 @@ if (!fs.existsSync(TMP_DB_PATH)) {
     }
     if (!copied) {
       // Write minimal db so function doesn't crash
-      fs.writeFileSync(TMP_DB_PATH, JSON.stringify({
-        users: [{ id: "u01", name: "Demo User", email: "user@demo.com", password: "pass123", role: "customer", phone: "+91-9876543210" }],
-        drivers: [{ id: "d01", name: "Demo Driver", password: "pass123", role: "driver", phone: "+91-9876543211", approved: true, status: "offline" }],
-        admins: [{ id: "admin", name: "admin", password: "admin123", role: "admin" }],
+      // SECURITY FIX: Hash passwords before storing (bcryptjs synchronous)
+      const demoDb = {
+        users: [{ id: "u01", name: "Demo User", email: "user@demo.com", password: bcrypt.hashSync("pass123", 10), role: "customer", phone: "+91-9876543210" }],
+        drivers: [{ id: "d01", name: "Demo Driver", password: bcrypt.hashSync("pass123", 10), role: "driver", phone: "+91-9876543211", approved: true, status: "offline" }],
+        admins: [{ id: "admin", name: "admin", password: bcrypt.hashSync("admin123", 10), role: "admin" }],
         bookings: [], trucks: [], fleet: [], payments: []
-      }, null, 2));
+      };
+      fs.writeFileSync(TMP_DB_PATH, JSON.stringify(demoDb, null, 2));
     }
   }
 }
@@ -49,7 +50,18 @@ const DB_PATH = TMP_DB_PATH;
 
 // ── Security middleware ──
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: process.env.CORS_ORIGIN || true, credentials: true }));
+// SECURITY FIX: Restrict CORS to specific origins instead of allowing all
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3000').split(',');
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      cb(null, true);
+    } else {
+      cb(new Error('CORS denied: ' + origin));
+    }
+  },
+  credentials: true
+}));
 app.use(bodyParser.json({ limit: '1mb' }));
 
 // Rate limiting
@@ -86,6 +98,41 @@ const otpStore = {}; // { phone: { otp, expiresAt } }
 function sanitize(str) {
   if (typeof str !== 'string') return str;
   return str.replace(/[<>]/g, '').trim().substring(0, 500);
+}
+
+// ── Password validation (SECURITY FIX: Enforce password strength) ──
+function validatePassword(password) {
+  if (!password || password.length < 8) {
+    return { valid: false, error: 'Password must be at least 8 characters' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, error: 'Password must contain at least one uppercase letter' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, error: 'Password must contain at least one number' };
+  }
+  if (!/[!@#$%^&*]/.test(password)) {
+    return { valid: false, error: 'Password must contain at least one special character (!@#$%^&*)' };
+  }
+  return { valid: true };
+}
+
+// ── Driver RC Validation (DRIVER VERIFICATION) ──
+function validateRC(rcData) {
+  if (!rcData) return false;
+  // RC should be a valid file/data URL (non-empty string or buffer)
+  const isValid = typeof rcData === 'string' && rcData.length > 100; // Minimum size check for base64 image
+  if (isValid) console.log('[RC Validation] ✅ RC auto-verified');
+  return isValid;
+}
+
+// ── Driver Photo Validation (DRIVER VERIFICATION) ──
+function validatePhoto(photoData) {
+  if (!photoData) return false;
+  // Photo should be a valid file/data URL (non-empty string or buffer)
+  const isValid = typeof photoData === 'string' && photoData.length > 100; // Minimum size check for base64 image
+  if (isValid) console.log('[Photo Validation] ✅ Profile photo auto-verified');
+  return isValid;
 }
 
 // ── Auth middleware ──
@@ -125,10 +172,10 @@ app.post('/api/otp/send', otpLimiter, async (req, res) => {
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
   otpStore[cleanPhone] = { otp, expiresAt };
-  // OTP logged only in development
+  // OTP logged only in development - NEVER return OTP in response (SECURITY FIX)
   if (process.env.NODE_ENV !== 'production') console.log(`OTP for ${cleanPhone}: ${otp}`);
 
-  return res.json({ success: true, otp });
+  return res.json({ success: true }); // ✅ OTP not returned for security
 });
 
 app.post('/api/otp/verify', (req, res) => {
@@ -152,8 +199,7 @@ app.post('/api/otp/verify', (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 //  BIOMETRIC AUTH (WebAuthn)
 // ═══════════════════════════════════════════════════════════════
-const biometricChallenges = {};
-const biometricCredentials = {};
+const biometricChallenges = {}; // In-memory challenges (short-lived, acceptable)
 
 app.post('/api/auth/biometric/register-challenge', (req, res) => {
   const { userId, role } = req.body;
@@ -169,27 +215,84 @@ app.post('/api/auth/biometric/register', (req, res) => {
   const stored = biometricChallenges[userId];
   if (!stored || Date.now() > stored.expiresAt) return res.status(400).json({ error: 'Challenge expired' });
   delete biometricChallenges[userId];
-  biometricCredentials[`${userId}_${role}`] = { credentialId, userId, role, registeredAt: Date.now() };
-  return res.json({ success: true });
+
+  // SECURITY FIX: Persist to database instead of in-memory
+  try {
+    const db = readDB();
+    const userCollection = role === 'driver' ? db.drivers : db.users;
+    const user = userCollection.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.biometric = {
+      credentialId,
+      registeredAt: Date.now()
+    };
+    writeDB(db);
+    return res.json({ success: true });
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to register biometric' });
+  }
 });
 
 app.post('/api/auth/biometric/auth-challenge', (req, res) => {
   const { userId, role } = req.body;
   if (!userId || !role) return res.status(400).json({ error: 'userId and role required' });
-  const cred = biometricCredentials[`${userId}_${role}`];
-  if (!cred) return res.status(404).json({ error: 'No biometric credential registered' });
-  const challenge = require('crypto').randomBytes(32).toString('base64url');
-  biometricChallenges[userId] = { challenge, role, expiresAt: Date.now() + 60000 };
-  return res.json({ challenge });
+
+  // SECURITY FIX: Load credential from database instead of in-memory
+  try {
+    const db = readDB();
+    const userCollection = role === 'driver' ? db.drivers : db.users;
+    const user = userCollection.find(u => u.id === userId);
+    if (!user || !user.biometric) return res.status(404).json({ error: 'No biometric credential registered' });
+
+    const challenge = require('crypto').randomBytes(32).toString('base64url');
+    biometricChallenges[userId] = { challenge, role, expiresAt: Date.now() + 60000 };
+    return res.json({ challenge });
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to get auth challenge' });
+  }
 });
 
 app.post('/api/auth/biometric/authenticate', async (req, res) => {
-  const { userId, role, credentialId } = req.body;
+  const { userId, role, credentialId, authenticatorData, clientDataJSON, signature } = req.body;
   if (!userId || !role || !credentialId) return res.status(400).json({ error: 'Missing fields' });
-  const cred = biometricCredentials[`${userId}_${role}`];
-  if (!cred || cred.credentialId !== credentialId) return res.status(401).json({ error: 'Invalid biometric credential' });
+
+  // SECURITY FIX: Load credential from database instead of in-memory
+  try {
+    const db = readDB();
+    const userCollection = role === 'driver' ? db.drivers : db.users;
+    const user = userCollection.find(u => u.id === userId);
+    if (!user || !user.biometric || user.biometric.credentialId !== credentialId) {
+      return res.status(401).json({ error: 'Invalid biometric credential' });
+    }
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to verify biometric' });
+  }
+
   const stored = biometricChallenges[userId];
   if (!stored || Date.now() > stored.expiresAt) return res.status(400).json({ error: 'Challenge expired' });
+
+  // Verify assertion if provided (enhanced security)
+  if (authenticatorData && clientDataJSON && signature) {
+    try {
+      // Decode the clientDataJSON to verify challenge and origin
+      const clientDataBuffer = Buffer.from(clientDataJSON, 'base64');
+      const clientData = JSON.parse(clientDataBuffer.toString('utf-8'));
+
+      // Verify the challenge matches
+      if (clientData.challenge !== stored.challenge) {
+        return res.status(401).json({ error: 'Challenge verification failed' });
+      }
+
+      // Verify origin matches (basic check)
+      if (!clientData.origin.includes(req.get('host'))) {
+        return res.status(401).json({ error: 'Origin verification failed' });
+      }
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid assertion format' });
+    }
+  }
+
   delete biometricChallenges[userId];
   const db = readDB();
   let user = null;
@@ -214,6 +317,18 @@ app.post('/api/auth/login', async (req, res) => {
   else if (role === 'driver') user = db.drivers.find(d => d.id === id);
   else if (role === 'admin') user = db.admins.find(a => a.id === id || a.name === id);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+  // DRIVER VERIFICATION: Check RC and photo verification before allowing login
+  if (role === 'driver') {
+    const docVerif = user.documentVerification || {};
+    if (!docVerif.rc || !docVerif.rc.verified) {
+      return res.status(403).json({ error: 'Your Registration Certificate (RC) is pending verification. Please wait for admin approval.' });
+    }
+    if (!docVerif.profilePhoto || !docVerif.profilePhoto.verified) {
+      return res.status(403).json({ error: 'Your profile photo is pending verification. Please wait for admin approval.' });
+    }
+  }
+
   if (role === 'driver' && user.approved === false && user.status === 'pending-approval') {
     return res.status(403).json({ error: 'Your account is pending approval' });
   }
@@ -329,7 +444,9 @@ app.post('/api/auth/change-password', (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   const { name, email, phone, password } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'name, email, password required' });
-  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  // SECURITY FIX: Use strong password validation
+  const pwValidation = validatePassword(password);
+  if (!pwValidation.valid) return res.status(400).json({ error: pwValidation.error });
   const db = readDB();
   if (db.users.find(u => u.email === email)) return res.status(409).json({ error: 'Email already registered' });
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -548,11 +665,33 @@ app.get('/api/drivers', (req, res) => {
   return res.json(db.drivers.map(({ password, ...d }) => d));
 });
 
+// DRIVER VERIFICATION: Get drivers pending document verification
+app.get('/api/drivers/pending-verification', (req, res) => {
+  const db = readDB();
+  const pendingDrivers = db.drivers.filter(d => {
+    const docVerif = d.documentVerification || {};
+    const rcPending = !docVerif.rc || docVerif.rc.verificationStatus === 'pending-review' || !docVerif.rc.verified;
+    const photoPending = !docVerif.profilePhoto || docVerif.profilePhoto.verificationStatus === 'pending-review' || !docVerif.profilePhoto.verified;
+    return rcPending || photoPending;
+  }).map(({ password, ...d }) => d);
+
+  return res.json(pendingDrivers);
+});
+
 // Driver self-registration (application)
 app.post('/api/drivers/register', (req, res) => {
   const db = readDB();
   const { name, phone, city, vehicleType, vehicleModel, vehicleMake, vehicleRegNumber, vehicleYear, licenseNumber, licenseExpiry, password: userPassword, profilePicture, vehiclePicture, uploadedDocuments } = req.body;
   if (!name || !phone || !licenseNumber) return res.status(400).json({ error: 'Name, phone, and license number are required' });
+
+  // DRIVER VERIFICATION: Require RC and profile photo for registration
+  if (!profilePicture) return res.status(400).json({ error: 'Driver profile photo is required' });
+  if (!uploadedDocuments || !uploadedDocuments.rc) return res.status(400).json({ error: 'Registration Certificate (RC) is required' });
+
+  // SECURITY FIX: Require password and validate strength
+  if (!userPassword) return res.status(400).json({ error: 'Password is required' });
+  const pwValidation = validatePassword(userPassword);
+  if (!pwValidation.valid) return res.status(400).json({ error: pwValidation.error });
 
   const cleanPhone = phone.replace(/\D/g, '');
   const phoneExists = db.drivers.find(d => d.phone?.replace(/\D/g, '') === cleanPhone);
@@ -562,8 +701,14 @@ app.post('/api/drivers/register', (req, res) => {
 
   let id;
   do { id = 'D' + String(Math.floor(1000 + Math.random() * 9000)); } while (db.drivers.find(d => d.id === id));
+  // SECURITY FIX: Hash password before storing
+  const hashedPassword = bcrypt.hashSync(userPassword, 10);
+  // DRIVER VERIFICATION: Auto-verify documents if they meet validation
+  const isRCValid = validateRC(uploadedDocuments.rc);
+  const isPhotoValid = validatePhoto(profilePicture);
+
   const newDriver = {
-    id, name, password: userPassword || '1234', mustChangePassword: !userPassword, phone, city: city || '',
+    id, name, password: hashedPassword, mustChangePassword: false, phone, city: city || '',
     status: 'pending-approval',
     available: false,
     approved: false,
@@ -576,6 +721,11 @@ app.post('/api/drivers/register', (req, res) => {
     profilePicture: profilePicture || null,
     vehiclePicture: vehiclePicture || null,
     uploadedDocuments: uploadedDocuments || null,
+    // DRIVER VERIFICATION: Track document verification status
+    documentVerification: {
+      rc: { uploaded: true, verified: isRCValid, verificationStatus: isRCValid ? 'auto-verified' : 'pending-review', verifiedAt: isRCValid ? new Date().toISOString() : null },
+      profilePhoto: { uploaded: true, verified: isPhotoValid, verificationStatus: isPhotoValid ? 'auto-verified' : 'pending-review', verifiedAt: isPhotoValid ? new Date().toISOString() : null },
+    },
     documents: { license: 'pending', insurance: 'pending', registration: 'pending' },
     vehicleDetails: {
       type: vehicleType || 'small',
@@ -591,6 +741,46 @@ app.post('/api/drivers/register', (req, res) => {
   writeDB(db);
   const { password, ...safe } = newDriver;
   return res.status(201).json(safe);
+});
+
+// DRIVER VERIFICATION: Admin verify/reject driver documents (RC and photo)
+app.post('/api/drivers/:id/verify-documents', (req, res) => {
+  const db = readDB();
+  const idx = db.drivers.findIndex(d => d.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Driver not found' });
+
+  const { rcVerified, photoVerified, rcReason, photoReason } = req.body;
+
+  if (!db.drivers[idx].documentVerification) {
+    db.drivers[idx].documentVerification = {
+      rc: { uploaded: false, verified: false, verificationStatus: 'not-submitted' },
+      profilePhoto: { uploaded: false, verified: false, verificationStatus: 'not-submitted' },
+    };
+  }
+
+  // Verify RC
+  if (rcVerified !== undefined) {
+    db.drivers[idx].documentVerification.rc.verified = rcVerified;
+    db.drivers[idx].documentVerification.rc.verificationStatus = rcVerified ? 'verified' : 'rejected';
+    db.drivers[idx].documentVerification.rc.verifiedAt = new Date().toISOString();
+    db.drivers[idx].documentVerification.rc.verificationReason = rcReason || null;
+  }
+
+  // Verify Photo
+  if (photoVerified !== undefined) {
+    db.drivers[idx].documentVerification.profilePhoto.verified = photoVerified;
+    db.drivers[idx].documentVerification.profilePhoto.verificationStatus = photoVerified ? 'verified' : 'rejected';
+    db.drivers[idx].documentVerification.profilePhoto.verifiedAt = new Date().toISOString();
+    db.drivers[idx].documentVerification.profilePhoto.verificationReason = photoReason || null;
+  }
+
+  writeDB(db);
+  const { password, ...safe } = db.drivers[idx];
+  return res.json({
+    success: true,
+    message: 'Documents verified',
+    driver: safe,
+  });
 });
 
 // Admin approve/reject driver

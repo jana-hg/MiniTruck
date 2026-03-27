@@ -8,8 +8,11 @@ const fs = require('fs');
 const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const http = require('http');
+const { initializeWebSocket, WebSocketEmitter } = require('./websocket');
 
 const app = express();
+const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 5005;
 const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
 const DB_PATH = path.join(__dirname, 'db.json');
@@ -162,12 +165,37 @@ app.post('/api/auth/biometric/auth-challenge', (req, res) => {
 });
 
 app.post('/api/auth/biometric/authenticate', async (req, res) => {
-  const { userId, role, credentialId } = req.body;
+  const { userId, role, credentialId, authenticatorData, clientDataJSON, signature } = req.body;
   if (!userId || !role || !credentialId) return res.status(400).json({ error: 'Missing fields' });
+
   const cred = biometricCredentials[`${userId}_${role}`];
   if (!cred || cred.credentialId !== credentialId) return res.status(401).json({ error: 'Invalid biometric credential' });
+
   const stored = biometricChallenges[userId];
   if (!stored || Date.now() > stored.expiresAt) return res.status(400).json({ error: 'Challenge expired' });
+
+  // Verify assertion if provided (enhanced security)
+  if (authenticatorData && clientDataJSON && signature) {
+    try {
+      // Decode the clientDataJSON to verify challenge and origin
+      const clientDataBuffer = Buffer.from(clientDataJSON, 'base64');
+      const clientData = JSON.parse(clientDataBuffer.toString('utf-8'));
+
+      // Verify the challenge matches
+      if (clientData.challenge !== stored.challenge) {
+        return res.status(401).json({ error: 'Challenge verification failed' });
+      }
+
+      // Verify origin matches (basic check)
+      const expectedOrigin = `${req.protocol}://${req.get('host')}`;
+      if (!clientData.origin.includes(req.get('host'))) {
+        return res.status(401).json({ error: 'Origin verification failed' });
+      }
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid assertion format' });
+    }
+  }
+
   delete biometricChallenges[userId];
   const db = readDB();
   let user = null;
@@ -1123,12 +1151,22 @@ if (fs.existsSync(DIST_PATH)) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  WEBSOCKET INITIALIZATION
+// ═══════════════════════════════════════════════════════════════
+const io = initializeWebSocket(httpServer);
+
+// Make io available globally for API endpoints
+global.io = io;
+global.WebSocketEmitter = WebSocketEmitter;
+
+// ═══════════════════════════════════════════════════════════════
 //  START
 // ═══════════════════════════════════════════════════════════════
-app.listen(PORT, () => {
-  console.log(`\n  MINITRUCK running on http://localhost:${PORT}`);
-  console.log(`  Database: ${DB_PATH}`);
-  if (fs.existsSync(DIST_PATH)) console.log(`  Frontend: serving from ${DIST_PATH}`);
-  else console.log(`  Frontend: not built yet (run "npm run build" first)`);
+httpServer.listen(PORT, () => {
+  console.log(`\n  ✅ MINITRUCK running on http://localhost:${PORT}`);
+  console.log(`  🔌 WebSocket: enabled (Socket.io)`);
+  console.log(`  📊 Database: ${DB_PATH}`);
+  if (fs.existsSync(DIST_PATH)) console.log(`  🌐 Frontend: serving from ${DIST_PATH}`);
+  else console.log(`  ⚠️  Frontend: not built yet (run "npm run build" first)`);
   console.log();
 });

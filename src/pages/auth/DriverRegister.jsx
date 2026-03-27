@@ -483,6 +483,25 @@ export default function DriverRegister() {
     setLoading(true);
 
     try {
+      // DRIVER VERIFICATION: Check required documents
+      if (!profilePic) {
+        setError('Driver profile photo is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!rcFrontPreview) {
+        setError('Registration Certificate (RC) is required - Please upload RC front');
+        setLoading(false);
+        return;
+      }
+
+      if (!rcBackPreview) {
+        setError('Registration Certificate (RC) back is required');
+        setLoading(false);
+        return;
+      }
+
       const [profileB64, vehicleB64] = await Promise.all([
         toBase64(profilePic),
         toBase64(vehiclePic),
@@ -501,10 +520,11 @@ export default function DriverRegister() {
         vehicleYear: form.vehicleYear ? Number(form.vehicleYear) : null,
         licenseNumber: form.licenseNumber,
         licenseExpiry: form.licenseExpiry,
+        password: form.password,
         profilePicture: profileB64,
         vehiclePicture: vehicleB64,
         uploadedDocuments: {
-          ...(rcFrontPreview ? { rcFront: rcFrontPreview } : {}),
+          rc: rcFrontPreview, // DRIVER VERIFICATION: Include RC
           ...(rcBackPreview ? { rcBack: rcBackPreview } : {}),
           ...(dlFrontPreview ? { dlFront: dlFrontPreview } : {}),
           ...(dlBackPreview ? { dlBack: dlBackPreview } : {}),
@@ -522,6 +542,14 @@ export default function DriverRegister() {
         setLoading(false);
         setError(data.error || 'Registration failed. Please try again.');
         return;
+      }
+
+      // DRIVER VERIFICATION: Store verification status
+      if (data.documentVerification) {
+        console.log('✅ Documents auto-verified:', {
+          rc: data.documentVerification.rc.verificationStatus,
+          photo: data.documentVerification.profilePhoto.verificationStatus
+        });
       }
 
       setGeneratedId(data.id);

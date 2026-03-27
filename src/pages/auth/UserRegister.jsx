@@ -26,6 +26,7 @@ export default function UserRegister() {
   const sectionTitle = { fontSize: 13, fontWeight: 700, color: C.text, margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 8 };
   const cardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '20px', boxShadow: C.shadow };
 
+  const [currentStep, setCurrentStep] = useState(1);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -183,7 +184,17 @@ export default function UserRegister() {
     }
   };
 
-  // --- Submit ---
+  // --- Step 1: Validate and proceed to step 2 ---
+
+  const handleNextStep = () => {
+    setError('');
+    if (!fullName.trim()) { setError('Please enter your full name'); return; }
+    if (!phone.trim() || phone.replace(/\D/g, '').length < 10) { setError('Please enter a valid phone number'); return; }
+    if (!otpVerified) { setError('Please verify your phone number'); return; }
+    setCurrentStep(2);
+  };
+
+  // --- Step 2: Submit registration ---
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -262,198 +273,264 @@ export default function UserRegister() {
             <Icon name="person" filled size={28} style={{ color: clr }} />
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: 0 }}>Welcome to MiniTruK!</h1>
-          <p style={{ fontSize: 13, color: C.sub, marginTop: 6 }}>Create your account to start booking rides</p>
+          <p style={{ fontSize: 13, color: C.sub, marginTop: 6 }}>
+            {currentStep === 1 ? 'Share your details to get started' : 'Secure your account with a PIN'}
+          </p>
+          {/* Step indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: currentStep === 1 ? clr : C.muted }}>Step 1: Details</div>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.border }} />
+            <div style={{ fontSize: 11, fontWeight: 700, color: currentStep === 2 ? clr : C.muted }}>Step 2: Password</div>
+          </div>
         </div>
 
         {/* Invisible reCAPTCHA container */}
         <div id="recaptcha-container-user"></div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* STEP 1: Personal Information & Profile */}
+        {currentStep === 1 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Personal Info */}
-          <div style={cardStyle}>
-            <div style={sectionTitle}>
-              <Icon name="person" size={18} style={{ color: clr }} />
-              Personal Information
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label style={labelStyle}>Full Name *</label>
-                <input type="text" placeholder="Enter your full name" value={fullName} onChange={e => setFullName(e.target.value)} required style={inputStyle} />
+            {/* Personal Info */}
+            <div style={cardStyle}>
+              <div style={sectionTitle}>
+                <Icon name="person" size={18} style={{ color: clr }} />
+                Personal Information
               </div>
-              <div>
-                <label style={labelStyle}>Phone Number *</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input type="tel" placeholder="Enter phone number" value={phone} onChange={handlePhoneChange} required maxLength={10}
-                    style={{ ...inputStyle, flex: 1 }} disabled={otpVerified} />
-                  {!otpVerified && (
-                    <button type="button" onClick={sendOtp} disabled={otpSending || otpTimer > 0 || !phone}
-                      style={{
-                        padding: '0 16px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
-                        background: otpSent ? (isDark ? '#27272A' : '#F1F5F9') : clr,
-                        color: otpSent ? C.sub : '#fff',
-                        opacity: (otpSending || otpTimer > 0 || !phone) ? 0.5 : 1,
-                      }}>
-                      {otpSending ? 'Sending...' : otpTimer > 0 ? `${otpTimer}s` : otpSent ? 'Resend' : 'Send OTP'}
-                    </button>
-                  )}
-                  {otpVerified && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px', borderRadius: 10, background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5' }}>
-                      <Icon name="check_circle" filled size={16} style={{ color: '#10B981' }} />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#10B981' }}>Verified</span>
-                    </div>
-                  )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={labelStyle}>Full Name *</label>
+                  <input type="text" placeholder="Enter your full name" value={fullName} onChange={e => setFullName(e.target.value)} style={inputStyle} />
                 </div>
-              </div>
-
-              {/* OTP Error (always visible) */}
-              {otpError && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: isDark ? 'rgba(239,68,68,0.1)' : '#FEF2F2', border: '1px solid rgba(239,68,68,0.2)' }}>
-                  <Icon name="error" size={16} style={{ color: '#EF4444', flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#EF4444' }}>{otpError}</span>
-                </div>
-              )}
-
-              {/* OTP Input */}
-              {otpSent && !otpVerified && (
-                <div style={{ background: isDark ? '#09090B' : '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <Icon name="sms" size={16} style={{ color: clr }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>OTP sent to +91 {phone.replace(/\D/g, '')} via SMS</span>
-                  </div>
+                <div>
+                  <label style={labelStyle}>Phone Number *</label>
                   <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="tel" placeholder="Enter phone number" value={phone} onChange={handlePhoneChange} maxLength={10}
+                      style={{ ...inputStyle, flex: 1 }} disabled={otpVerified} />
+                    {!otpVerified && (
+                      <button type="button" onClick={sendOtp} disabled={otpSending || otpTimer > 0 || !phone}
+                        style={{
+                          padding: '0 16px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
+                          background: otpSent ? (isDark ? '#27272A' : '#F1F5F9') : clr,
+                          color: otpSent ? C.sub : '#fff',
+                          opacity: (otpSending || otpTimer > 0 || !phone) ? 0.5 : 1,
+                        }}>
+                        {otpSending ? 'Sending...' : otpTimer > 0 ? `${otpTimer}s` : otpSent ? 'Resend' : 'Send OTP'}
+                      </button>
+                    )}
+                    {otpVerified && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px', borderRadius: 10, background: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5' }}>
+                        <Icon name="check_circle" filled size={16} style={{ color: '#10B981' }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#10B981' }}>Verified</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* OTP Error */}
+                {otpError && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: isDark ? 'rgba(239,68,68,0.1)' : '#FEF2F2', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    <Icon name="error" size={16} style={{ color: '#EF4444', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#EF4444' }}>{otpError}</span>
+                  </div>
+                )}
+
+                {/* OTP Input */}
+                {otpSent && !otpVerified && (
+                  <div style={{ background: isDark ? '#09090B' : '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <Icon name="sms" size={16} style={{ color: clr }} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>OTP sent to +91 {phone.replace(/\D/g, '')} via SMS</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        type="text" placeholder="Enter 6-digit OTP" value={otpValue}
+                        onChange={e => { setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6)); setOtpError(''); }}
+                        maxLength={6}
+                        style={{ ...inputStyle, flex: 1, textAlign: 'center', letterSpacing: '0.3em', fontSize: 18, fontWeight: 700 }}
+                      />
+                      <button type="button" onClick={verifyOtp} disabled={otpValue.length !== 6}
+                        style={{
+                          padding: '0 20px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                          background: otpValue.length === 6 ? clr : C.muted, color: '#fff', flexShrink: 0,
+                        }}>
+                        Verify
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label style={labelStyle}>Email Address</label>
+                  <input type="email" placeholder="email@example.com (optional)" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />
+                </div>
+              </div>
+            </div>
+
+            {/* Profile Picture */}
+            <div style={cardStyle}>
+              <div style={sectionTitle}>
+                <Icon name="photo_camera" size={18} style={{ color: clr }} />
+                Profile Picture
+              </div>
+              <div
+                onClick={() => setPickerOpen(true)}
+                style={{
+                  padding: '20px 16px', borderRadius: 12, border: `2px dashed ${profilePreview ? clr : C.border}`,
+                  background: profilePreview ? `${clr}08` : C.inputBg, cursor: 'pointer', textAlign: 'center',
+                  transition: 'border-color 0.2s, background 0.2s',
+                }}
+              >
+                {profilePreview ? (
+                  <img src={profilePreview} alt="Profile" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', margin: '0 auto 8px', display: 'block' }} />
+                ) : (
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: `${clr}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
+                    <Icon name="person" size={28} style={{ color: clr }} />
+                  </div>
+                )}
+                <p style={{ fontSize: 12, fontWeight: 600, color: C.text, margin: 0 }}>{profilePreview ? 'Tap to change' : 'Add Profile Picture'}</p>
+                <p style={{ fontSize: 10, color: C.muted, margin: '4px 0 0' }}>Take a photo or choose from gallery</p>
+              </div>
+              {/* Hidden file inputs */}
+              <input ref={profileFileRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
+              <input ref={profileCamRef} type="file" accept="image/*" capture="user" onChange={handleFile} style={{ display: 'none' }} />
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div style={{ padding: '12px 16px', borderRadius: 10, background: isDark ? '#7F1D1D40' : '#FEF2F2', border: `1px solid ${isDark ? '#991B1B' : '#FECACA'}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="error" size={18} style={{ color: '#EF4444' }} />
+                <p style={{ fontSize: 13, color: '#EF4444', fontWeight: 600, margin: 0 }}>{error}</p>
+              </div>
+            )}
+
+            {/* Next Button */}
+            <button type="button" onClick={handleNextStep}
+              style={{
+                width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',
+                cursor: 'pointer', fontSize: 15, fontWeight: 700, background: clr, color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>
+              <Icon name="arrow_forward" size={18} style={{ color: '#fff' }} />
+              Next
+            </button>
+          </div>
+        )}
+
+        {/* STEP 2: Set Password */}
+        {currentStep === 2 && (
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Security */}
+            <div style={cardStyle}>
+              <div style={sectionTitle}>
+                <Icon name="security" size={18} style={{ color: clr }} />
+                Set Password
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={labelStyle}>4-Digit Login PIN *</label>
+                  <div style={{ position: 'relative' }}>
                     <input
-                      type="text" placeholder="Enter 6-digit OTP" value={otpValue}
-                      onChange={e => { setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6)); setOtpError(''); }}
-                      maxLength={6}
-                      style={{ ...inputStyle, flex: 1, textAlign: 'center', letterSpacing: '0.3em', fontSize: 18, fontWeight: 700 }}
+                      type={showPass ? 'text' : 'password'}
+                      placeholder="Enter 4-digit PIN"
+                      value={password}
+                      onChange={e => setPassword(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      required
+                      style={{ ...inputStyle, paddingRight: 40, letterSpacing: showPass ? 'default' : '0.5em', fontSize: 16, textAlign: 'center' }}
+                      autoFocus
                     />
-                    <button type="button" onClick={verifyOtp} disabled={otpValue.length !== 6}
-                      style={{
-                        padding: '0 20px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
-                        background: otpValue.length === 6 ? clr : C.muted, color: '#fff', flexShrink: 0,
-                      }}>
-                      Verify
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 4 }}
+                    >
+                      <Icon name={showPass ? 'visibility_off' : 'visibility'} size={18} />
                     </button>
                   </div>
                 </div>
-              )}
-
-              <div>
-                <label style={labelStyle}>Email Address</label>
-                <input type="email" placeholder="email@example.com (optional)" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />
-              </div>
-            </div>
-          </div>
-
-          {/* Security */}
-          <div style={cardStyle}>
-            <div style={sectionTitle}>
-              <Icon name="security" size={18} style={{ color: clr }} />
-              Security
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label style={labelStyle}>Set a 4-Digit Login PIN *</label>
-                <div style={{ position: 'relative' }}>
+                <div>
+                  <label style={labelStyle}>Confirm PIN *</label>
                   <input
                     type={showPass ? 'text' : 'password'}
-                    placeholder="Enter 4-digit PIN"
-                    value={password}
-                    onChange={e => setPassword(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="Re-enter 4-digit PIN"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value.replace(/\D/g, '').slice(0, 4))}
                     required
-                    style={{ ...inputStyle, paddingRight: 40, letterSpacing: showPass ? 'default' : '0.5em', fontSize: 16, textAlign: 'center' }}
+                    style={{ ...inputStyle, letterSpacing: showPass ? 'default' : '0.5em', fontSize: 16, textAlign: 'center' }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass(!showPass)}
-                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 4 }}
-                  >
-                    <Icon name={showPass ? 'visibility_off' : 'visibility'} size={18} />
-                  </button>
                 </div>
               </div>
-              <div>
-                <label style={labelStyle}>Confirm PIN *</label>
-                <input
-                  type={showPass ? 'text' : 'password'}
-                  placeholder="Re-enter 4-digit PIN"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  required
-                  style={{ ...inputStyle, letterSpacing: showPass ? 'default' : '0.5em', fontSize: 16, textAlign: 'center' }}
-                />
+            </div>
+
+            {/* Review Info */}
+            <div style={cardStyle}>
+              <div style={sectionTitle}>
+                <Icon name="check_circle" size={18} style={{ color: '#10B981' }} />
+                Review Your Details
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {profilePreview ? (
+                    <img src={profilePreview} alt="Profile" style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 50, height: 50, borderRadius: '50%', background: `${clr}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="person" size={24} style={{ color: clr }} />
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fullName || 'Your Name'}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{phone}</div>
+                  </div>
+                </div>
+                {email && (
+                  <div style={{ fontSize: 12, color: C.sub }}>
+                    <span style={{ fontWeight: 600 }}>Email:</span> {email}
+                  </div>
+                )}
               </div>
             </div>
-          </div>
 
-          {/* Profile Picture */}
-          <div style={cardStyle}>
-            <div style={sectionTitle}>
-              <Icon name="photo_camera" size={18} style={{ color: clr }} />
-              Profile Picture
-            </div>
-            <div
-              onClick={() => setPickerOpen(true)}
-              style={{
-                padding: '20px 16px', borderRadius: 12, border: `2px dashed ${profilePreview ? clr : C.border}`,
-                background: profilePreview ? `${clr}08` : C.inputBg, cursor: 'pointer', textAlign: 'center',
-                transition: 'border-color 0.2s, background 0.2s',
-              }}
-            >
-              {profilePreview ? (
-                <img src={profilePreview} alt="Profile" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', margin: '0 auto 8px', display: 'block' }} />
-              ) : (
-                <div style={{ width: 56, height: 56, borderRadius: '50%', background: `${clr}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
-                  <Icon name="person" size={28} style={{ color: clr }} />
-                </div>
-              )}
-              <p style={{ fontSize: 12, fontWeight: 600, color: C.text, margin: 0 }}>{profilePreview ? 'Tap to change' : 'Add Profile Picture'}</p>
-              <p style={{ fontSize: 10, color: C.muted, margin: '4px 0 0' }}>Take a photo or choose from gallery</p>
-            </div>
-            {/* Hidden file inputs */}
-            <input ref={profileFileRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
-            <input ref={profileCamRef} type="file" accept="image/*" capture="user" onChange={handleFile} style={{ display: 'none' }} />
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div style={{ padding: '12px 16px', borderRadius: 10, background: isDark ? '#7F1D1D40' : '#FEF2F2', border: `1px solid ${isDark ? '#991B1B' : '#FECACA'}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Icon name="error" size={18} style={{ color: '#EF4444' }} />
-              <p style={{ fontSize: 13, color: '#EF4444', fontWeight: 600, margin: 0 }}>{error}</p>
-            </div>
-          )}
-
-          {/* OTP not verified info */}
-          {!otpVerified && (
-            <div style={{ padding: '12px 16px', borderRadius: 12, background: isDark ? '#27272A' : '#F1F5F9', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Icon name="info" size={16} style={{ color: C.muted }} />
-              <span style={{ fontSize: 12, color: C.sub }}>Verify your phone number to create account</span>
-            </div>
-          )}
-
-          {/* Submit */}
-          <button type="submit" disabled={loading || !otpVerified}
-            style={{
-              width: '100%', padding: '14px 0', borderRadius: 12, border: 'none',
-              cursor: (loading || !otpVerified) ? 'not-allowed' : 'pointer',
-              fontSize: 15, fontWeight: 700, background: otpVerified ? clr : C.muted, color: '#fff',
-              opacity: loading ? 0.7 : 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}>
-            {loading ? (
-              <>
-                <Icon name="sync" size={18} style={{ color: '#fff', animation: 'spin 1s linear infinite' }} />
-                Creating Account...
-              </>
-            ) : (
-              <>
-                <Icon name="person_add" size={18} style={{ color: '#fff' }} />
-                Create Account
-              </>
+            {/* Error */}
+            {error && (
+              <div style={{ padding: '12px 16px', borderRadius: 10, background: isDark ? '#7F1D1D40' : '#FEF2F2', border: `1px solid ${isDark ? '#991B1B' : '#FECACA'}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="error" size={18} style={{ color: '#EF4444' }} />
+                <p style={{ fontSize: 13, color: '#EF4444', fontWeight: 600, margin: 0 }}>{error}</p>
+              </div>
             )}
-          </button>
-        </form>
+
+            {/* Buttons Row */}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button type="button" onClick={() => setCurrentStep(1)}
+                style={{
+                  flex: 1, padding: '14px 0', borderRadius: 12, border: `2px solid ${C.border}`,
+                  cursor: 'pointer', fontSize: 15, fontWeight: 700, background: 'transparent', color: C.text,
+                }}>
+                Back
+              </button>
+              <button type="submit" disabled={loading}
+                style={{
+                  flex: 1, padding: '14px 0', borderRadius: 12, border: 'none',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: 15, fontWeight: 700, background: clr, color: '#fff',
+                  opacity: loading ? 0.7 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}>
+                {loading ? (
+                  <>
+                    <Icon name="sync" size={18} style={{ color: '#fff', animation: 'spin 1s linear infinite' }} />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Icon name="check_circle" size={18} style={{ color: '#fff' }} />
+                    Finish
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Footer */}
         <div style={{ textAlign: 'center', marginTop: 20, paddingBottom: 24 }}>

@@ -217,6 +217,74 @@ export default function DriverHome() {
         </button>
       </div>
 
+      {/* DRIVER VERIFICATION: Status Banner */}
+      {user?.documentVerification && (
+        <div style={{
+          marginBottom: 14,
+          padding: '12px 14px',
+          borderRadius: 12,
+          background: (user.documentVerification.rc?.verified && user.documentVerification.profilePhoto?.verified)
+            ? (isDark ? 'rgba(16,185,129,0.08)' : '#D1FAE5')
+            : (isDark ? 'rgba(245,158,11,0.08)' : '#FEF3C7'),
+          border: `1px solid ${(user.documentVerification.rc?.verified && user.documentVerification.profilePhoto?.verified)
+            ? (isDark ? 'rgba(16,185,129,0.25)' : '#6EE7B7')
+            : (isDark ? 'rgba(245,158,11,0.25)' : '#FCD34D')}`,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10
+        }}>
+          <div style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            background: (user.documentVerification.rc?.verified && user.documentVerification.profilePhoto?.verified)
+              ? (isDark ? 'rgba(16,185,129,0.15)' : '#DBEAFE')
+              : (isDark ? 'rgba(245,158,11,0.15)' : '#FEF3C7'),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <Icon
+              name={(user.documentVerification.rc?.verified && user.documentVerification.profilePhoto?.verified) ? 'check_circle' : 'pending'}
+              size={18}
+              style={{
+                color: (user.documentVerification.rc?.verified && user.documentVerification.profilePhoto?.verified)
+                  ? C.green
+                  : '#F59E0B'
+              }}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: (user.documentVerification.rc?.verified && user.documentVerification.profilePhoto?.verified)
+                ? (isDark ? '#10B981' : '#065F46')
+                : (isDark ? '#F59E0B' : '#92400E')
+            }}>
+              {(user.documentVerification.rc?.verified && user.documentVerification.profilePhoto?.verified)
+                ? '✅ Documents Verified'
+                : '⏳ Verification Pending'}
+            </div>
+            <div style={{
+              fontSize: 11,
+              color: (user.documentVerification.rc?.verified && user.documentVerification.profilePhoto?.verified)
+                ? (isDark ? '#10B981' : '#047857')
+                : (isDark ? '#FCD34D' : '#A16207'),
+              marginTop: 3,
+              lineHeight: 1.4
+            }}>
+              {!user.documentVerification.rc?.verified && 'RC pending review. '}
+              {!user.documentVerification.profilePhoto?.verified && 'Photo pending review. '}
+              {(user.documentVerification.rc?.verified && user.documentVerification.profilePhoto?.verified)
+                ? 'Account pending admin approval.'
+                : 'Please wait for admin approval.'}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Profile Incomplete Notification */}
       {driver?.profileIncomplete && driver?.missingFields?.length > 0 && (
         <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 12, background: isDark ? 'rgba(251,191,36,0.08)' : '#FFFBEB', border: `1px solid ${isDark ? 'rgba(251,191,36,0.25)' : '#FDE68A'}`, display: 'flex', alignItems: 'flex-start', gap: 10 }}>

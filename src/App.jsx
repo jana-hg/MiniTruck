@@ -2,9 +2,13 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { PlatformProvider } from './context/PlatformContext';
+import { DataSyncProvider } from './context/DataSyncContext';
 
 import Header from './components/layout/Header';
 import BottomNav from './components/layout/BottomNav';
+import SplashScreen from './components/SplashScreen';
+import SyncStatusIndicator from './components/SyncStatusIndicator';
 
 import PortalSwitcher from './pages/auth/PortalSwitcher';
 import LoginScreen from './pages/auth/LoginScreen';
@@ -45,8 +49,11 @@ function AppRoutes() {
   const isAuthRoute = location.pathname.startsWith('/login');
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--on-surface)' }}>
-      {!isAdminRoute && !isAuthRoute && <Header />}
+    <>
+      <SplashScreen />
+      <SyncStatusIndicator />
+      <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--on-surface)' }}>
+        {!isAdminRoute && !isAuthRoute && <Header />}
 
       <main style={{
         width: '100%',
@@ -96,19 +103,24 @@ function AppRoutes() {
         </div>
       </main>
 
-      {!isAdminRoute && !isAuthRoute && <BottomNav />}
-    </div>
+        {!isAdminRoute && !isAuthRoute && <BottomNav />}
+      </div>
+    </>
   );
 }
 
 export default function App() {
   return (
     <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </ThemeProvider>
+      <PlatformProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <DataSyncProvider>
+              <AppRoutes />
+            </DataSyncProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </PlatformProvider>
     </BrowserRouter>
   );
 }

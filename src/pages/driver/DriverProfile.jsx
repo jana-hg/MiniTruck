@@ -194,7 +194,6 @@ export default function DriverProfile() {
 
   if (!driver) return <div style={{ padding: '80px 0', textAlign: 'center', color: C.muted }}>Loading...</div>;
 
-  const docs = driver.documents || {};
   const vehicle = driver.vehicleDetails || {};
   const renderField = (label, field, value, type = 'text', sensitive = false) => (
     <div key={field}>
@@ -387,23 +386,165 @@ export default function DriverProfile() {
       )}
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
 
-      {/* Documents */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, boxShadow: C.shadow }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>Document Verification</div>
-        {[
-          { label: 'Driving License', status: docs.license },
-          { label: 'Insurance', status: docs.insurance },
-          { label: 'Vehicle Registration', status: docs.registration },
-        ].map(d => (
-          <div key={d.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${C.border}` }}>
-            <span style={{ fontSize: 13, color: C.text }}>{d.label}</span>
-            <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 10px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 4, background: d.status === 'verified' ? (isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5') : (isDark ? 'rgba(245,158,11,0.1)' : '#FFFBEB'), color: d.status === 'verified' ? '#10B981' : '#F59E0B' }}>
-              <Icon name={d.status === 'verified' ? 'verified' : 'pending'} size={12} />
-              {d.status || 'pending'}
-            </span>
+      {/* Document Verification (RC & Photo) */}
+      {user?.documentVerification && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, boxShadow: C.shadow }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>Document Verification</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* RC Verification */}
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Registration Certificate (RC)</div>
+              <div style={{
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: user.documentVerification.rc?.verified
+                  ? (isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5')
+                  : user.documentVerification.rc?.rejected
+                  ? (isDark ? 'rgba(239,68,68,0.1)' : '#FEE2E2')
+                  : (isDark ? 'rgba(245,158,11,0.1)' : '#FEF3C7'),
+                border: `1px solid ${
+                  user.documentVerification.rc?.verified
+                    ? (isDark ? 'rgba(16,185,129,0.3)' : '#A7F3D0')
+                    : user.documentVerification.rc?.rejected
+                    ? (isDark ? 'rgba(239,68,68,0.3)' : '#FECACA')
+                    : (isDark ? 'rgba(245,158,11,0.3)' : '#FDE68A')
+                }`,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10
+              }}>
+                <Icon
+                  name={
+                    user.documentVerification.rc?.verified
+                      ? 'verified'
+                      : user.documentVerification.rc?.rejected
+                      ? 'close_circle'
+                      : 'pending'
+                  }
+                  size={16}
+                  style={{
+                    color: user.documentVerification.rc?.verified
+                      ? '#10B981'
+                      : user.documentVerification.rc?.rejected
+                      ? '#EF4444'
+                      : '#F59E0B',
+                    marginTop: 2,
+                    flexShrink: 0
+                  }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: user.documentVerification.rc?.verified
+                      ? '#10B981'
+                      : user.documentVerification.rc?.rejected
+                      ? '#EF4444'
+                      : '#F59E0B'
+                  }}>
+                    {user.documentVerification.rc?.verified
+                      ? '✅ Verified'
+                      : user.documentVerification.rc?.rejected
+                      ? '❌ Rejected'
+                      : '⏳ Pending'}
+                  </div>
+                  {user.documentVerification.rc?.verificationStatus && (
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                      Status: {user.documentVerification.rc.verificationStatus}
+                    </div>
+                  )}
+                  {user.documentVerification.rc?.verifiedAt && (
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                      Verified: {new Date(user.documentVerification.rc.verifiedAt).toLocaleDateString()} {new Date(user.documentVerification.rc.verifiedAt).toLocaleTimeString()}
+                    </div>
+                  )}
+                  {user.documentVerification.rc?.rejectionReason && (
+                    <div style={{ fontSize: 11, color: '#EF4444', marginTop: 4, fontStyle: 'italic' }}>
+                      Reason: {user.documentVerification.rc.rejectionReason}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Photo Verification */}
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Profile Photo</div>
+              <div style={{
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: user.documentVerification.profilePhoto?.verified
+                  ? (isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5')
+                  : user.documentVerification.profilePhoto?.rejected
+                  ? (isDark ? 'rgba(239,68,68,0.1)' : '#FEE2E2')
+                  : (isDark ? 'rgba(245,158,11,0.1)' : '#FEF3C7'),
+                border: `1px solid ${
+                  user.documentVerification.profilePhoto?.verified
+                    ? (isDark ? 'rgba(16,185,129,0.3)' : '#A7F3D0')
+                    : user.documentVerification.profilePhoto?.rejected
+                    ? (isDark ? 'rgba(239,68,68,0.3)' : '#FECACA')
+                    : (isDark ? 'rgba(245,158,11,0.3)' : '#FDE68A')
+                }`,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10
+              }}>
+                <Icon
+                  name={
+                    user.documentVerification.profilePhoto?.verified
+                      ? 'verified'
+                      : user.documentVerification.profilePhoto?.rejected
+                      ? 'close_circle'
+                      : 'pending'
+                  }
+                  size={16}
+                  style={{
+                    color: user.documentVerification.profilePhoto?.verified
+                      ? '#10B981'
+                      : user.documentVerification.profilePhoto?.rejected
+                      ? '#EF4444'
+                      : '#F59E0B',
+                    marginTop: 2,
+                    flexShrink: 0
+                  }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: user.documentVerification.profilePhoto?.verified
+                      ? '#10B981'
+                      : user.documentVerification.profilePhoto?.rejected
+                      ? '#EF4444'
+                      : '#F59E0B'
+                  }}>
+                    {user.documentVerification.profilePhoto?.verified
+                      ? '✅ Verified'
+                      : user.documentVerification.profilePhoto?.rejected
+                      ? '❌ Rejected'
+                      : '⏳ Pending'}
+                  </div>
+                  {user.documentVerification.profilePhoto?.verificationStatus && (
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                      Status: {user.documentVerification.profilePhoto.verificationStatus}
+                    </div>
+                  )}
+                  {user.documentVerification.profilePhoto?.verifiedAt && (
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                      Verified: {new Date(user.documentVerification.profilePhoto.verifiedAt).toLocaleDateString()} {new Date(user.documentVerification.profilePhoto.verifiedAt).toLocaleTimeString()}
+                    </div>
+                  )}
+                  {user.documentVerification.profilePhoto?.rejectionReason && (
+                    <div style={{ fontSize: 11, color: '#EF4444', marginTop: 4, fontStyle: 'italic' }}>
+                      Reason: {user.documentVerification.profilePhoto.rejectionReason}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* Earnings */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: C.shadow }}>

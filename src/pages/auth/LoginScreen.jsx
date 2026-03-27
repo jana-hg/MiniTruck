@@ -272,7 +272,32 @@ export default function LoginScreen({ role = 'customer' }) {
       if (step === 1 && formId && formPass) {
         const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: formId, password: formPass, role }) });
         const data = await res.json();
-        if (!res.ok || data.error) { setLoading(false); setError(data.error || 'Invalid credentials'); return; }
+
+        // DRIVER VERIFICATION: Handle verification errors
+        if (!res.ok || data.error) {
+          setLoading(false);
+
+          // Check if 403 Forbidden (verification issue)
+          if (res.status === 403) {
+            const errorMsg = data.error || '';
+
+            if (errorMsg.includes('RC') || errorMsg.includes('Certificate')) {
+              setError('⏳ Your Registration Certificate is pending verification. Please wait for admin approval.');
+            } else if (errorMsg.includes('photo') || errorMsg.includes('Photo')) {
+              setError('⏳ Your profile photo is pending verification. Please wait for admin approval.');
+            } else if (errorMsg.includes('approval')) {
+              setError('⏳ Your account is pending approval. Check back soon!');
+            } else if (errorMsg.includes('rejected')) {
+              setError('❌ Your application was rejected. Please contact support.');
+            } else {
+              setError(errorMsg);
+            }
+          } else {
+            setError(data.error || 'Invalid credentials');
+          }
+          return;
+        }
+
         setLoading(false);
         // If biometric is available and not yet registered for this role, prompt
         if (biometricAvailable && !hasBiometricCredential()) {

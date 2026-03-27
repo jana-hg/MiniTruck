@@ -87,13 +87,17 @@ export async function registerBiometric(userId, role) {
     }
   });
 
+  if (!credential) throw new Error('Failed to create biometric credential');
+
   const credentialId = bufferToBase64url(credential.rawId);
+  const attestationObject = bufferToBase64url(credential.response.attestationObject);
+  const clientDataJSON = bufferToBase64url(credential.response.clientDataJSON);
 
   // 3. Register with backend
   const regRes = await fetch('/api/auth/biometric/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, role, credentialId })
+    body: JSON.stringify({ userId, role, credentialId, attestationObject, clientDataJSON })
   });
   if (!regRes.ok) throw new Error('Failed to register biometric on server');
 
@@ -123,8 +127,8 @@ export async function authenticateWithBiometric() {
   if (!cRes.ok) throw new Error('Biometric login not available for this user');
   const { challenge: serverChallenge } = await cRes.json();
 
-  // 2. Trigger fingerprint verification UI
-  await navigator.credentials.get({
+  // 2. Trigger fingerprint verification UI and capture assertion
+  const assertion = await navigator.credentials.get({
     publicKey: {
       challenge: base64urlToBuffer(serverChallenge),
       rpId: window.location.hostname,
@@ -138,13 +142,26 @@ export async function authenticateWithBiometric() {
     }
   });
 
+  if (!assertion) throw new Error('Biometric verification failed');
+
   // 3. Verify with backend to get a fresh token
+  const authenticatorData = bufferToBase64url(assertion.response.authenticatorData);
+  const clientDataJSON = bufferToBase64url(assertion.response.clientDataJSON);
+  const signature = bufferToBase64url(assertion.response.signature);
+
   const res = await fetch('/api/auth/biometric/authenticate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: stored.userId, role: stored.role, credentialId: stored.credentialId })
+    body: JSON.stringify({
+      userId: stored.userId,
+      role: stored.role,
+      credentialId: stored.credentialId,
+      authenticatorData,
+      clientDataJSON,
+      signature
+    })
   });
-  
+
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Login failed');
   return data;

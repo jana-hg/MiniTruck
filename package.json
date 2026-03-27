@@ -6,12 +6,22 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:customer": "vite build --outDir dist-customer --mode customer",
+    "build:driver": "vite build --outDir dist-driver --mode driver",
     "start": "npm run build && node backend/server.js",
     "serve": "node backend/server.js",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:copy:customer": "npx cap copy --config=capacitor.customer.config.ts",
+    "cap:copy:driver": "npx cap copy --config=capacitor.driver.config.ts",
+    "cap:build:customer": "npm run build:customer && npm run cap:copy:customer",
+    "cap:build:driver": "npm run build:driver && npm run cap:copy:driver"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/core": "^8.3.0",
+    "@capacitor/splash-screen": "^8.0.1",
     "axios": "^1.13.6",
     "bcryptjs": "^3.0.3",
     "body-parser": "^2.2.2",
@@ -29,9 +39,12 @@
     "react-easy-crop": "^5.5.7",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.13.2",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.0",
     "@eslint/js": "^9.39.4",
     "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.2.14",
@@ -42,6 +55,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
     "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2",
     "vite": "^8.0.1"
   }
 }

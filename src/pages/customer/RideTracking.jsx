@@ -154,11 +154,19 @@ export default function RideTracking() {
                 <Icon name="person" filled size={22} style={{ color: C.accent }} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{driver.name || 'Driver'}</span>
                   {driver.rating > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: C.accent, background: C.accentBg, padding: '2px 6px', borderRadius: 4 }}>{driver.rating} ★</span>}
+                  {driver.documentVerification?.rc?.verified && driver.documentVerification?.profilePhoto?.verified && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#065F46', background: isDark ? 'rgba(16,185,129,0.15)' : '#D1FAE5', padding: '2px 6px', borderRadius: 4 }}>✅ Verified</span>
+                  )}
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{driver.truckId || '--'} · {driver.stats?.totalTrips || 0} trips</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                  {driver.documentVerification?.rc?.verified && driver.documentVerification?.profilePhoto?.verified && (
+                    <span>✅ Identity verified · </span>
+                  )}
+                  {driver.truckId || '--'} · {driver.stats?.totalTrips || 0} trips
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                 <button onClick={() => window.open('tel:+911234567890', '_self')} style={{ width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: C.accentBg, border: `1px solid ${C.border}`, color: C.accent }}>

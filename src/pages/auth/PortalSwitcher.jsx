@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { usePlatform } from '../../context/PlatformContext';
 import Icon from '../../components/ui/Icon';
 import AppIcon from '../../components/ui/AppIcon';
 
@@ -15,7 +16,21 @@ const portals = [
 export default function PortalSwitcher() {
   const { logout, isAuthenticated } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const { platform, isCustomer, isDriver } = usePlatform();
+
   useEffect(() => { if (isAuthenticated) logout(); }, []);
+
+  // If running as customer app, redirect directly to customer login
+  if (isCustomer) {
+    return <Navigate to="/login-user" replace />;
+  }
+
+  // If running as driver app, redirect directly to driver login
+  if (isDriver) {
+    return <Navigate to="/login-driver" replace />;
+  }
+
+  // Web platform shows all portals (no admin in mobile apps)
 
   const C = {
     bg: isDark ? '#09090B' : '#F1F5F9',

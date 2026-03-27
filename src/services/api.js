@@ -8,6 +8,11 @@ const api = axios.create({
 });
 
 // Attach auth token to every request
+// SECURITY NOTE: Token stored in localStorage (XSS vulnerable)
+// TODO: Migrate to httpOnly cookies for better security:
+//   1. Backend: Set token in httpOnly cookie instead of response body
+//   2. Frontend: Remove localStorage token retrieval
+//   3. Browser will automatically send cookie with requests
 api.interceptors.request.use(config => {
   try {
     const auth = JSON.parse(localStorage.getItem('minitruck_auth') || '{}');
