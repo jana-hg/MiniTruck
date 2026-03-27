@@ -20,7 +20,7 @@ const DB_PATH = path.join(__dirname, 'db.json');
 // ── Security middleware ──
 app.use(helmet({ contentSecurityPolicy: false }));
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || 'https://minitruck-app.vercel.app,http://localhost:5173,http://localhost:3000').split(',');
-app.use(cors({ origin: (origin, cb) => { if (!origin || ALLOWED_ORIGINS.includes(origin)) cb(null, true); else cb(null, true); }, credentials: true }));
+app.use(cors({ origin: (origin, cb) => { if (!origin || ALLOWED_ORIGINS.includes(origin)) cb(null, true); else cb(new Error('CORS not allowed')); }, credentials: true }));
 app.use(bodyParser.json({ limit: '1mb' }));
 
 // Rate limiting
@@ -1118,7 +1118,7 @@ app.get('/api/geocode', async (req, res) => {
   try {
     const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5`, { headers: { 'User-Agent': 'MiniTruck-TruckBooking/1.0 (demo@minitruck.app)' } });
     return res.json(await response.json());
-  } catch (err) { return res.status(502).json({ error: 'Geocoding failed', details: err.message }); }
+  } catch (err) { return res.status(502).json({ error: 'Geocoding service unavailable' }); }
 });
 
 app.get('/api/route', async (req, res) => {
@@ -1132,7 +1132,7 @@ app.get('/api/route', async (req, res) => {
       return res.json({ distance: route.distance, duration: route.duration, distanceKm: parseFloat((route.distance / 1000).toFixed(2)), durationMin: parseFloat((route.duration / 60).toFixed(1)), geometry: route.geometry });
     }
     return res.json(data);
-  } catch (err) { return res.status(502).json({ error: 'Routing failed', details: err.message }); }
+  } catch (err) { return res.status(502).json({ error: 'Routing service unavailable' }); }
 });
 
 // ═══════════════════════════════════════════════════════════════
