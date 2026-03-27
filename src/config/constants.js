@@ -15,9 +15,9 @@ const BACKEND_URL = import.meta.env.VITE_API_BASE || (isNative() ? 'http://local
 export const API_BASE = BACKEND_URL;
 
 export const MOCK_CREDENTIALS = {
-  customer: { id: '9876543210', password: '1234' },
-  driver: { id: 'D8829', password: '1234' },
-  admin: { id: 'admin', password: '1234', otp: '000000' },
+  customer: { id: '9876543210', password: '1234', label: 'Rajesh Kumar' },
+  driver: { id: 'D8829', password: '1234', label: 'Ravi Shankar' },
+  admin: { id: 'admin', password: '1234', otp: '000000', label: 'Admin' },
 };
 
 export const TRUCK_TYPES = [
