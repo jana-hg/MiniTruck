@@ -346,7 +346,7 @@ export default function AdminDashboard() {
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{TABS.find(t => t.id === activeTab)?.label || 'Dashboard'}</div>
             <div style={{ fontSize: 11, color: C.muted }}>
-              {activeTab === 'overview' ? 'Real-time overview of all operations' : activeTab === 'rides' ? 'All booking and ride records' : activeTab === 'drivers' ? 'Fleet operator management' : activeTab === 'trucks' ? 'Vehicle inventory and pricing' : activeTab === 'users' ? 'Customer accounts and activity' : activeTab === 'payments' ? 'Transaction history and billing' : activeTab === 'support' ? 'Customer support tickets and messages' : activeTab === 'database' ? 'View, edit, and delete all database records' : 'Live fleet tracking'}
+              {activeTab === 'overview' ? 'Real-time overview of all operations' : activeTab === 'rides' ? 'All booking and ride records' : activeTab === 'drivers' ? 'Driver management' : activeTab === 'trucks' ? 'Vehicle inventory and pricing' : activeTab === 'users' ? 'Customer accounts and activity' : activeTab === 'payments' ? 'Transaction history and billing' : activeTab === 'support' ? 'Customer support tickets and messages' : activeTab === 'database' ? 'View, edit, and delete all database records' : 'Live fleet tracking'}
             </div>
           </div>
         </div>
@@ -808,29 +808,238 @@ function DriversTab({ driversList, C, isDark, mob }) {
 
       {/* Driver List */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-        {drivers.map(d => (
+        {drivers.filter(d => {
+          if (!searchQuery) return true;
+          const q = searchQuery.toLowerCase();
+          return (d.name || '').toLowerCase().includes(q) || (d.id || '').toLowerCase().includes(q) || (d.phone || '').includes(q);
+        }).map(d => (
           <Box key={d.id} C={C}>
             <div style={{ padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: isDark ? 'rgba(52,211,153,0.1)' : '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name="person" size={24} style={{ color: '#10B981' }} />
-                  </div>
+                  {d.profilePicture ? (
+                    <img src={d.profilePicture} alt={d.name} style={{ width: 44, height: 44, borderRadius: 12, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                  ) : (
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: isDark ? 'rgba(52,211,153,0.1)' : '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="person" size={24} style={{ color: '#10B981' }} />
+                    </div>
+                  )}
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{d.name}</div>
-                    <div style={{ fontSize: 11, color: C.muted }}>{d.id}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{d.id} | {d.phone}</div>
                   </div>
                 </div>
                 <StatusBadge status={d.status} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 12, color: C.sub }}>{d.city}</span>
-                <button onClick={() => setEditDriver(d)} style={{ background: 'none', border: 'none', color: C.accent, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Edit</button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setViewDriver(d)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>View</button>
+                  <button onClick={() => openEdit(d)} style={{ background: 'none', border: 'none', color: C.accent, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Edit</button>
+                </div>
               </div>
             </div>
           </Box>
         ))}
       </div>
+
+      {/* ── View Driver Details Modal ── */}
+      {viewDriver && (
+        <Modal open={!!viewDriver} onClose={() => setViewDriver(null)} title={`Driver: ${viewDriver.name}`} C={C} isDark={isDark}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Profile Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, background: isDark ? 'rgba(52,211,153,0.05)' : '#F0FDF4', borderRadius: 12 }}>
+              {viewDriver.profilePicture ? (
+                <img src={viewDriver.profilePicture} alt={viewDriver.name} style={{ width: 72, height: 72, borderRadius: 14, objectFit: 'cover', border: `2px solid ${C.accent}` }} />
+              ) : (
+                <div style={{ width: 72, height: 72, borderRadius: 14, background: isDark ? 'rgba(52,211,153,0.15)' : '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="person" filled size={36} style={{ color: '#10B981' }} />
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>{viewDriver.name}</div>
+                <div style={{ fontSize: 13, color: C.muted }}>ID: {viewDriver.id}</div>
+                <StatusBadge status={viewDriver.status} />
+              </div>
+            </div>
+
+            {/* Details Grid */}
+            {[
+              { label: 'Phone', value: viewDriver.phone, icon: 'phone' },
+              { label: 'City', value: viewDriver.city || 'N/A', icon: 'location_on' },
+              { label: 'Truck Type', value: viewDriver.truckType || 'N/A', icon: 'local_shipping' },
+              { label: 'Rating', value: viewDriver.rating ? `${viewDriver.rating} / 5` : 'No ratings', icon: 'star' },
+              { label: 'Earnings', value: `₹${viewDriver.earnings || 0}`, icon: 'currency_rupee' },
+              { label: 'Rank', value: viewDriver.rank || 'Rookie', icon: 'military_tech' },
+              { label: 'Available', value: viewDriver.available ? 'Yes' : 'No', icon: 'toggle_on' },
+              { label: 'License Number', value: viewDriver.licenseNumber || 'N/A', icon: 'badge' },
+              { label: 'License Expiry', value: viewDriver.licenseExpiry || 'N/A', icon: 'event' },
+            ].map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: isDark ? '#111' : '#F8FAFC', borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <Icon name={item.icon} size={18} style={{ color: C.accent }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{item.value}</div>
+                </div>
+              </div>
+            ))}
+
+            {/* Vehicle Details */}
+            {viewDriver.vehicleDetails && (
+              <div style={{ padding: 14, background: isDark ? '#111' : '#F8FAFC', borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>Vehicle Details</div>
+                {[
+                  { label: 'Make', value: viewDriver.vehicleDetails.make || 'N/A' },
+                  { label: 'Model', value: viewDriver.vehicleDetails.model || 'N/A' },
+                  { label: 'Year', value: viewDriver.vehicleDetails.year || 'N/A' },
+                  { label: 'Plate Number', value: viewDriver.vehicleDetails.plateNumber || 'N/A' },
+                  { label: 'Reg Number', value: viewDriver.vehicleDetails.regNumber || 'N/A' },
+                ].map((v, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: i < 4 ? `1px solid ${C.border}` : 'none' }}>
+                    <span style={{ fontSize: 12, color: C.muted }}>{v.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{v.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Documents */}
+            {viewDriver.documents && (
+              <div style={{ padding: 14, background: isDark ? '#111' : '#F8FAFC', borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>Documents</div>
+                {Object.entries(viewDriver.documents).map(([key, val], i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
+                    <span style={{ fontSize: 12, color: C.muted, textTransform: 'capitalize' }}>{key}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20, background: val === 'verified' ? (isDark ? 'rgba(52,211,153,0.15)' : '#D1FAE5') : (isDark ? 'rgba(251,191,36,0.15)' : '#FEF3C7'), color: val === 'verified' ? '#10B981' : '#F59E0B' }}>{val}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Stats */}
+            {viewDriver.stats && (
+              <div style={{ padding: 14, background: isDark ? '#111' : '#F8FAFC', borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>Stats</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {[
+                    { label: 'Total Trips', value: viewDriver.stats.totalTrips || 0 },
+                    { label: 'Jobs Today', value: viewDriver.stats.jobsToday || 0 },
+                    { label: 'Total Distance', value: `${viewDriver.stats.totalDistance || 0} km` },
+                    { label: 'Active Hours', value: `${viewDriver.stats.activeHours || 0} hrs` },
+                    { label: 'Service Level', value: `${viewDriver.stats.serviceLevel || 0}%` },
+                  ].map((s, i) => (
+                    <div key={i} style={{ textAlign: 'center', padding: 8, background: isDark ? '#0A0A0A' : '#fff', borderRadius: 8, border: `1px solid ${C.border}` }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.accent }}>{s.value}</div>
+                      <div style={{ fontSize: 10, color: C.muted, fontWeight: 600 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => { setViewDriver(null); openEdit(viewDriver); }} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: C.accent, color: isDark ? '#000' : '#fff' }}>Edit Driver</button>
+              <button onClick={() => setViewDriver(null)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${C.border}`, cursor: 'pointer', fontSize: 13, fontWeight: 700, background: 'transparent', color: C.text }}>Close</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Add / Edit Driver Modal ── */}
+      {showAdd && (
+        <Modal open={showAdd} onClose={() => setShowAdd(false)} title={editDriver ? `Edit: ${editDriver.name}` : 'Add New Driver'} C={C} isDark={isDark}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <ModalInput label="Full Name *" value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} C={C} isDark={isDark} />
+            <ModalInput label="Phone *" value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} C={C} isDark={isDark} />
+            <ModalInput label="City *" value={form.city} onChange={v => setForm(p => ({ ...p, city: v }))} C={C} isDark={isDark} />
+
+            {/* Vehicle Type */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vehicle Type *</label>
+              <select value={form.truckType} onChange={e => setForm(p => ({ ...p, truckType: e.target.value }))}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 13, outline: 'none' }}>
+                <option value="" disabled>Select vehicle type</option>
+                <option value="mini_truck_500kg">Mini Truck (500KG)</option>
+                <option value="box_truck_2.5t">Box Truck (2.5T)</option>
+                <option value="heavy_duty_10t">Heavy Duty (10T+)</option>
+              </select>
+            </div>
+
+            {/* Vehicle Brand - Grid Selection */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vehicle Brand *</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                {Object.keys(INDIAN_TRUCKS).map(brand => {
+                  const sel = selectedBrand === brand;
+                  return (
+                    <button key={brand} type="button" onClick={() => {
+                      setSelectedBrand(brand);
+                      setModelOptions(ALL_TRUCK_MODELS.filter(t => t.brand === brand));
+                      setForm(p => ({ ...p, make: brand, model: '' }));
+                    }}
+                      style={{
+                        padding: '10px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                        background: sel ? `${C.accent}15` : 'transparent',
+                        border: sel ? `2px solid ${C.accent}` : `1px solid ${C.border}`,
+                        fontSize: 11, fontWeight: sel ? 700 : 500, color: sel ? C.accent : C.text,
+                      }}>
+                      {brand}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Vehicle Model - Grid Suggestions */}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Vehicle Model * {form.model && <span style={{ color: C.accent, fontWeight: 700 }}>&#10003; {form.model}</span>}
+              </label>
+              {selectedBrand && modelOptions.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+                  {modelOptions.map((t, i) => {
+                    const sel = form.model === t.full;
+                    return (
+                      <button key={i} type="button" onClick={() => setForm(p => ({ ...p, model: t.full, make: t.brand }))}
+                        style={{
+                          padding: '10px 8px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                          background: sel ? `${C.accent}15` : 'transparent',
+                          border: sel ? `2px solid ${C.accent}` : `1px solid ${C.border}`,
+                          display: 'flex', alignItems: 'center', gap: 6,
+                        }}>
+                        <Icon name="local_shipping" size={14} style={{ color: sel ? C.accent : C.muted, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, fontWeight: sel ? 700 : 500, color: sel ? C.accent : C.text }}>{t.model}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <input type="text" placeholder="Select brand above or type model name" value={form.model}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setForm(p => ({ ...p, model: v }));
+                    if (v.length >= 2) {
+                      const matches = ALL_TRUCK_MODELS.filter(t => t.full.toLowerCase().includes(v.toLowerCase()) || t.model.toLowerCase().includes(v.toLowerCase())).slice(0, 8);
+                      if (matches.length > 0) { setModelOptions(matches); setSelectedBrand(matches[0].brand); }
+                    }
+                  }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+              )}
+            </div>
+
+            <ModalInput label="License Number *" value={form.licenseNumber} onChange={v => setForm(p => ({ ...p, licenseNumber: v }))} C={C} isDark={isDark} />
+            <ModalInput label="License Expiry *" type="date" value={form.licenseExpiry} onChange={v => setForm(p => ({ ...p, licenseExpiry: v }))} C={C} isDark={isDark} />
+            <ModalInput label="Year" value={form.year} onChange={v => setForm(p => ({ ...p, year: v }))} C={C} isDark={isDark} />
+            <ModalInput label="Plate Number *" value={form.plateNumber} onChange={v => setForm(p => ({ ...p, plateNumber: v }))} C={C} isDark={isDark} />
+
+            <button onClick={handleSave} disabled={saving}
+              style={{ marginTop: 8, padding: '12px', borderRadius: 10, border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 700, background: saving ? C.muted : C.accent, color: isDark ? '#000' : '#fff', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving...' : (editDriver ? 'Update Driver' : 'Add Driver')}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -6,9 +6,8 @@ const config: CapacitorConfig = {
   webDir: 'dist-customer',
   server: {
     androidScheme: 'https',
-    // For development: connect to local backend
-    // Change to your actual backend server IP/URL
-    url: 'http://localhost:5005',
+    // Using Smart Wrapper approach instead of direct redirect.
+    // url: 'https://minitruck-app.vercel.app',
     cleartext: true,
   },
   android: {

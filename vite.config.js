@@ -8,5 +8,10 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:5005'
     }
+  },
+  build: {
+    rollupOptions: {
+      external: ['capacitor-biometric-auth']
+    }
   }
 })

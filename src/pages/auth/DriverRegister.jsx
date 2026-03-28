@@ -747,7 +747,7 @@ export default function DriverRegister() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, overflowY: 'auto', padding: '24px 16px', display: 'flex', justifyContent: 'center' }}>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
         style={{ width: '100%', maxWidth: 480 }}>
 
@@ -756,8 +756,8 @@ export default function DriverRegister() {
           <div style={{ width: 56, height: 56, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', background: `${clr}15` }}>
             <Icon name="local_shipping" filled size={28} style={{ color: clr }} />
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: 0 }}>Join MiniTruK as a Driver</h1>
-          <p style={{ fontSize: 13, color: C.sub, marginTop: 6 }}>Fill out the details below to create your driver account</p>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: 0 }}>Join MiniTruck as a Driver</h1>
+          <p style={{ fontSize: 13, color: C.sub, marginTop: 8, lineHeight: 1.6 }}>Register your vehicle and start earning with MiniTruck</p>
         </div>
 
         {/* Invisible reCAPTCHA container for Firebase Phone Auth */}

@@ -491,8 +491,8 @@ export default function MyBookings() {
 
                 {/* Footer */}
                 <div style={{ textAlign: 'center', padding: '12px 0 4px', borderTop: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: C.text, letterSpacing: '-0.01em' }}>MiniTruK</div>
-                  <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>Thank you for choosing MiniTruK</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.text, letterSpacing: '-0.01em' }}>MiniTruck</div>
+                  <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>Thank you for choosing MiniTruck</div>
                 </div>
               </div>
             </div>
