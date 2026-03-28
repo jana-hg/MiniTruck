@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { drivers as driversApi } from '../../services/api';
 import Icon from '../../components/ui/Icon';
+import { isBiometricReady, hasBiometricCredential, registerBiometric, removeBiometricCredential } from '../../services/biometric';
 // import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../../config/firebase';
 import { sendMockOtp } from '../../config/otpMock';
 
@@ -15,6 +16,9 @@ export default function DriverProfile() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [bioReady, setBioReady] = useState(false);
+  const [activeBio, setActiveBio] = useState(false);
+  const [bioLoading, setBioLoading] = useState(false);
 
   // OTP states
   const [otpRequired, setOtpRequired] = useState(false);
@@ -46,6 +50,11 @@ export default function DriverProfile() {
 
   useEffect(() => {
     if (user?.id) driversApi.getDriver(user.id).then(d => { setDriver(d); initForm(d); }).catch(() => {});
+    
+    // Check biometric
+    isBiometricReady().then(setBioReady);
+    const cred = hasBiometricCredential();
+    if (cred && cred.userId === user?.id) setActiveBio(true);
   }, [user]);
 
   useEffect(() => {
@@ -305,6 +314,32 @@ export default function DriverProfile() {
           {renderField('Registration Number', 'vehicleRegNumber', vehicle.regNumber || vehicle.plateNumber, 'text', true)}
           {renderField('Year', 'vehicleYear', vehicle.year, 'number')}
         </div>
+      </div>
+
+      {/* Security */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, boxShadow: C.shadow }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>Security</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Fingerprint Login</div>
+            <div style={{ fontSize: 11, color: C.muted }}>Use biometric for fast access</div>
+          </div>
+          <button onClick={async () => {
+             if (activeBio) {
+               removeBiometricCredential();
+               setActiveBio(false);
+             } else {
+               setBioLoading(true);
+               const success = await registerBiometric(user.id, 'driver');
+               setActiveBio(success);
+               setBioLoading(false);
+             }
+          }} disabled={bioLoading || !bioReady}
+            style={{ width: 44, height: 24, borderRadius: 12, position: 'relative', cursor: 'pointer', border: 'none', background: activeBio ? C.accent : C.muted, transition: 'all 0.2s', opacity: (bioLoading || !bioReady) ? 0.6 : 1 }}>
+            <div style={{ width: 18, height: 18, borderRadius: 9, background: '#fff', position: 'absolute', top: 3, left: activeBio ? 23 : 3, transition: 'all 0.2s' }} />
+          </button>
+        </div>
+        {!bioReady && <div style={{ fontSize: 9, color: '#EF4444', marginTop: 4, fontWeight: 700 }}>Hardware not supported or setup missing</div>}
       </div>
 
       {/* License */}

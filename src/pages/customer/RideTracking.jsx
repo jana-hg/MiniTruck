@@ -92,7 +92,7 @@ export default function RideTracking() {
   return (
     <div style={{ position: 'relative' }}>
       {/* Full screen map */}
-      <div style={{ position: 'fixed', inset: 0, top: 56, zIndex: 0 }}>
+      <div style={{ position: 'fixed', inset: 0, top: 'calc(56px + env(safe-area-inset-top))', zIndex: 0 }}>
         <MapView
           center={mapCenter}
           zoom={14}
@@ -105,7 +105,7 @@ export default function RideTracking() {
       </div>
 
       {/* Top Status Bar */}
-      <div style={{ position: 'fixed', top: 56, left: 0, right: 0, zIndex: 10, ...glass }}>
+      <div style={{ position: 'fixed', top: 'calc(56px + env(safe-area-inset-top))', left: 0, right: 0, zIndex: 10, ...glass }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <Link to="/bookings" style={{ textDecoration: 'none', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#27272A' : '#F1F5F9', color: C.sub, flexShrink: 0 }}>
             <Icon name="arrow_back" size={18} />
@@ -131,7 +131,7 @@ export default function RideTracking() {
       </div>
 
       {/* Bottom panel */}
-      <div style={{ position: 'fixed', bottom: 68, left: 0, right: 0, zIndex: 10, ...glass, borderRadius: '18px 18px 0 0' }}>
+      <div style={{ position: 'fixed', bottom: 'calc(68px + env(safe-area-inset-bottom))', left: 0, right: 0, zIndex: 10, ...glass, borderRadius: '18px 18px 0 0' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '14px 16px' }}>
 
           {/* Route summary */}

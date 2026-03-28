@@ -53,8 +53,10 @@ export default function Header() {
   return (
     <>
       <header style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, height: 56,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px',
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, 
+        height: 'calc(56px + env(safe-area-inset-top))',
+        paddingTop: 'env(safe-area-inset-top)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 16, paddingRight: 16,
         background: C.bg, borderBottom: `1px solid ${C.border}`,
         boxShadow: isDark ? '0 1px 4px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.04)',
       }}>
@@ -110,9 +112,9 @@ export default function Header() {
       {/* Hamburger menu dropdown */}
       {menuOpen && isAuthenticated && (
         <>
-          <div style={{ position: 'fixed', inset: 0, top: 56, zIndex: 40, background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }} onClick={() => setMenuOpen(false)} />
+          <div style={{ position: 'fixed', inset: 0, top: 'calc(56px + env(safe-area-inset-top))', zIndex: 40, background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }} onClick={() => setMenuOpen(false)} />
           <div style={{
-            position: 'fixed', right: 0, top: 56, width: 260, zIndex: 45,
+            position: 'fixed', right: 0, top: 'calc(56px + env(safe-area-inset-top))', width: 260, zIndex: 45,
             background: C.bg, borderLeft: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`,
             borderRadius: '0 0 0 16px',
             boxShadow: isDark ? '0 8px 30px rgba(0,0,0,0.5)' : '0 8px 30px rgba(0,0,0,0.12)',

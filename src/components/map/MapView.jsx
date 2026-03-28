@@ -161,6 +161,8 @@ export default function MapView({
   fitMarkers = false,
   showLocate = true,
   onClick,
+  onExit,
+  exitLabel = 'EXIT',
   mapRef,
   children,
 }) {
@@ -179,7 +181,7 @@ export default function MapView({
       zoomControl={true}
       attributionControl={true}
     >
-      <TileLayer url={tileUrl} attribution={tileAttribution} />
+      <TileLayer url={tileUrl} attribution={tileAttribution} updateWhenIdle={true} keepBuffer={2} />
 
       <MapInstanceCapture mapRef={mapRef} />
       {onClick && <MapClickHandler onClick={onClick} />}
@@ -199,6 +201,35 @@ export default function MapView({
       )}
 
       {showLocate && <LocateButton onLocate={setUserLocation} />}
+      
+      {onExit && (
+        <div className="leaflet-top leaflet-left" style={{ marginTop: 10, marginLeft: 10 }}>
+          <div className="leaflet-control">
+            <button
+              onClick={onExit}
+              style={{
+                padding: '10px 18px',
+                background: '#EF4444',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 24,
+                cursor: 'pointer',
+                fontWeight: 900,
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                boxShadow: '0 8px 24px rgba(239,68,68,0.3)',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span>
+              {exitLabel}
+            </button>
+          </div>
+        </div>
+      )}
 
       {userLocation && (
         <>

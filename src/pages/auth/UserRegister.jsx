@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import Icon from '../../components/ui/Icon';
+import { API_BASE } from '../../config/constants';
 // import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../../config/firebase';
 import { sendMockOtp } from '../../config/otpMock';
 
@@ -214,7 +215,7 @@ export default function UserRegister() {
         password: password,
       };
 
-      const res = await fetch('/api/users/register', {
+      const res = await fetch(`${API_BASE}/users/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -272,8 +273,15 @@ export default function UserRegister() {
           <div style={{ width: 56, height: 56, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', background: `${clr}15` }}>
             <Icon name="person" filled size={28} style={{ color: clr }} />
           </div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, fontFamily: "'Lexend', sans-serif", color: C.text, margin: 0 }}>
-            Welcome to MiniTruck!
+          <h1 style={{
+            fontSize: 28,
+            fontWeight: 800,
+            fontFamily: "'Lexend', sans-serif",
+            margin: '0 auto',
+            letterSpacing: '-0.8px',
+            color: isDark ? '#FFFFFF' : '#000000',
+          }}>
+            Welcome to Mini<span style={{ fontWeight: 300, opacity: 0.85 }}>Truck!</span>
           </h1>
           <p style={{ fontSize: 13, color: C.sub, marginTop: 8, lineHeight: 1.6 }}>
             {currentStep === 1 ? 'Create your account to book trucks instantly' : 'Set a 4-digit PIN to secure your account'}

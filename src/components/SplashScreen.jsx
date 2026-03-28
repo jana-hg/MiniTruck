@@ -15,7 +15,7 @@ export default function SplashScreen() {
 
   useEffect(() => {
     // Show splash screen for exactly 2 seconds before fading out beautifully
-    const timer = setTimeout(() => setIsVisible(false), 2000);
+    const timer = setTimeout(() => setIsVisible(false), 1000);
     return () => clearTimeout(timer);
   }, []);
 

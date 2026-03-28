@@ -38,8 +38,11 @@ export default function BottomNav() {
 
   return (
     <nav className="lg:hidden" style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
-      display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: 64, padding: '0 8px',
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
+      display: 'flex', justifyContent: 'space-around', alignItems: 'center', 
+      height: 'calc(64px + env(safe-area-inset-bottom))', 
+      paddingBottom: 'env(safe-area-inset-bottom)',
+      paddingLeft: 8, paddingRight: 8,
       background: C.bg, borderTop: `1px solid ${C.border}`,
       boxShadow: isDark ? '0 -2px 10px rgba(0,0,0,0.3)' : '0 -1px 4px rgba(0,0,0,0.04)',
     }}>

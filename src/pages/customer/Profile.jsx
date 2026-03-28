@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { users as usersApi, wallet as walletApi } from '../../services/api';
 import Icon from '../../components/ui/Icon';
+import { isBiometricReady, hasBiometricCredential, registerBiometric, removeBiometricCredential } from '../../services/biometric';
 
 export default function Profile() {
   const { user, logout } = useAuth();
@@ -14,6 +15,9 @@ export default function Profile() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '' });
   const [saving, setSaving] = useState(false);
   const [notifs, setNotifs] = useState(true);
+  const [bioReady, setBioReady] = useState(false);
+  const [activeBio, setActiveBio] = useState(false);
+  const [bioLoading, setBioLoading] = useState(false);
 
   const C = { card: isDark ? '#18181B' : '#FFFFFF', border: isDark ? '#27272A' : '#E2E8F0', text: isDark ? '#FAFAFA' : '#0F172A', sub: isDark ? '#A1A1AA' : '#64748B', muted: isDark ? '#52525B' : '#94A3B8', accent: isDark ? '#FFD700' : '#3B82F6', accentBg: isDark ? 'rgba(255,215,0,0.08)' : '#EFF6FF', shadow: isDark ? '0 4px 20px rgba(0,0,0,0.4)' : '0 1px 3px rgba(0,0,0,0.08)', inputBg: isDark ? '#09090B' : '#FFFFFF' };
   const box = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, boxShadow: C.shadow };
@@ -24,6 +28,11 @@ export default function Profile() {
     if (user?.id) {
       usersApi.getProfile(user.id).then(d => { setProfile(d); setForm({ name: d.name || '', email: d.email || '', phone: d.phone || '', address: d.address || '' }); setNotifs(d.preferences?.notifications !== false); }).catch(() => {});
       walletApi.getWallet(user.id).then(d => setWalletBalance(d.balance || 0)).catch(() => {});
+      
+      // Check biometric
+      isBiometricReady().then(setBioReady);
+      const cred = hasBiometricCredential();
+      if (cred && cred.userId === user.id) setActiveBio(true);
     }
   }, [user]);
 
@@ -76,6 +85,32 @@ export default function Profile() {
           <div><div style={lbl}>Wallet Balance</div><div style={{ fontSize: 22, fontWeight: 900, color: C.text }}>₹{walletBalance.toFixed(2)}</div></div>
         </div>
         <Link to="/wallet" style={{ textDecoration: 'none', padding: '8px 16px', borderRadius: 8, background: C.accent, color: isDark ? '#000' : '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="add" size={16} /> Top Up</Link>
+      </div>
+
+      {/* Security & Bio */}
+      <div style={box}>
+        <div style={{ ...lbl, marginBottom: 16 }}>Security</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Fingerprint Login</div>
+            <div style={{ fontSize: 11, color: C.muted }}>Use biometric for fast access</div>
+          </div>
+          <button onClick={async () => {
+            if (activeBio) {
+              removeBiometricCredential();
+              setActiveBio(false);
+            } else {
+              setBioLoading(true);
+              const success = await registerBiometric(user.id, 'customer');
+              setActiveBio(success);
+              setBioLoading(false);
+            }
+          }} disabled={bioLoading || !bioReady}
+            style={{ width: 44, height: 24, borderRadius: 12, position: 'relative', cursor: 'pointer', border: 'none', background: activeBio ? C.accent : C.muted, transition: 'all 0.2s', opacity: (bioLoading || !bioReady) ? 0.6 : 1 }}>
+            <div style={{ width: 18, height: 18, borderRadius: 9, background: '#fff', position: 'absolute', top: 3, left: activeBio ? 23 : 3, transition: 'all 0.2s' }} />
+          </button>
+        </div>
+        {!bioReady && <div style={{ fontSize: 9, color: '#EF4444', marginTop: 4, fontWeight: 700 }}>Hardware not supported or setup missing</div>}
       </div>
 
       {/* Preferences */}

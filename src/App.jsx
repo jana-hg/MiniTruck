@@ -4,6 +4,9 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { PlatformProvider } from './context/PlatformContext';
 import { DataSyncProvider } from './context/DataSyncContext';
+import { Capacitor } from '@capacitor/core';
+import { SplashScreen as CapSplash } from '@capacitor/splash-screen';
+import { useEffect } from 'react';
 
 import Header from './components/layout/Header';
 import BottomNav from './components/layout/BottomNav';
@@ -49,6 +52,13 @@ function AppRoutes() {
   const isTrackingRoute = location.pathname.startsWith('/tracking');
   const isAuthRoute = location.pathname.startsWith('/login');
 
+  useEffect(() => {
+    // Hide native splash screen immediately when React app starts
+    if (Capacitor.isNativePlatform()) {
+      CapSplash.hide();
+    }
+  }, []);
+
   return (
     <>
       <SplashScreen />
@@ -58,10 +68,11 @@ function AppRoutes() {
 
       <main style={{
         width: '100%',
-        paddingTop: isAuthRoute ? 0 : isTrackingRoute ? 56 : isAdminRoute ? 0 : 72,
-        paddingBottom: isAuthRoute ? 0 : isTrackingRoute ? 0 : isAdminRoute ? 0 : 84,
+        paddingTop: isAuthRoute ? 0 : isTrackingRoute ? 'calc(56px + env(safe-area-inset-top))' : isAdminRoute ? 0 : 'calc(72px + env(safe-area-inset-top))',
+        paddingBottom: isAuthRoute ? 0 : isTrackingRoute ? 'env(safe-area-inset-bottom)' : isAdminRoute ? 0 : 'calc(84px + env(safe-area-inset-bottom))',
         paddingLeft: isAuthRoute || isTrackingRoute || isAdminRoute ? 0 : 16,
         paddingRight: isAuthRoute || isTrackingRoute || isAdminRoute ? 0 : 16,
+        flex: 1,
         overflowY: 'visible',
       }}>
         <div style={isAuthRoute || isTrackingRoute || isAdminRoute ? {} : { maxWidth: 1280, margin: '0 auto', width: '100%' }}>

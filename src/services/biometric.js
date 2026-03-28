@@ -1,5 +1,5 @@
-// Biometric Authentication supporting both Native (Capacitor) and Web (WebAuthn)
 import { Capacitor } from '@capacitor/core';
+import { API_BASE } from '../config/constants';
 
 // Lazy load BiometricAuth only on native platforms to avoid build errors on web
 let BiometricAuthPlugin = null;
@@ -22,18 +22,18 @@ export function isBiometricAvailable() {
   return !!(window.PublicKeyCredential && navigator.credentials);
 }
 
-// Async check if platform authenticator (fingerprint/face) is actually available
 export async function isBiometricReady() {
   try {
+    // 1. Try Native plugin
     if (Capacitor.isNativePlatform()) {
       const bio = await getBiometricAuth();
-      if (!bio) return false;
-      const result = await bio.checkBiometry();
-      return result.isAvailable;
+      if (bio) {
+        const result = await bio.checkBiometry();
+        if (result.isAvailable || result.reason?.toLowerCase().includes('enrolled')) return true;
+      }
     }
-
-    if (!isBiometricAvailable()) return false;
-    if (window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+    // 2. Try WebAuthn fallback (works in APK too)
+    if (window.PublicKeyCredential && window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
       return await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
     }
     return false;
@@ -96,8 +96,16 @@ export async function registerBiometric(userId, role) {
         androidSubtitle: 'Verify your identity to enable fingerprint login',
       });
 
-      // Store credential locally
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ userId, role, isNative: true, enabledAt: Date.now() }));
+      // Store credential locally with current auth data for offline/session-recovery auth
+      const authData = localStorage.getItem('minitruck_auth');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
+        userId, 
+        role, 
+        isNative: true, 
+        enabledAt: Date.now(),
+        // Back up the auth data so it can be recovered via fingerprint even if session is cleared
+        backupAuth: authData ? JSON.parse(authData) : null
+      }));
       return true;
     } catch (e) {
       console.error('Biometric registration failed:', e);
@@ -108,7 +116,7 @@ export async function registerBiometric(userId, role) {
   if (!isBiometricAvailable()) throw new Error('Biometric not supported');
 
   // WebAuthn Registration Flow (for web browser)
-  const cRes = await fetch('/api/auth/biometric/register-challenge', {
+const cRes = await fetch(`${API_BASE}/auth/biometric/register-challenge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId, role })
@@ -133,7 +141,7 @@ export async function registerBiometric(userId, role) {
   const attestationObject = bufferToBase64url(credential.response.attestationObject);
   const clientDataJSON = bufferToBase64url(credential.response.clientDataJSON);
 
-  const regRes = await fetch('/api/auth/biometric/register', {
+const regRes = await fetch(`${API_BASE}/auth/biometric/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId, role, credentialId, attestationObject, clientDataJSON })
@@ -147,60 +155,63 @@ export async function registerBiometric(userId, role) {
 // Authenticate using biometric
 export async function authenticateWithBiometric() {
   const stored = hasBiometricCredential();
-  if (!stored) throw new Error('No biometric credential found');
+  const role = localStorage.getItem('minitruck_role') || 'customer';
 
-  if (Capacitor.isNativePlatform() || stored.isNative) {
-    // Native Biometric Auth
-    const bio = await getBiometricAuth();
-    if (!bio) throw new Error('Biometric not available on this device');
+  // Try Native First
+  if (Capacitor.isNativePlatform() && (stored?.isNative !== false)) {
+    try {
+      const bio = await getBiometricAuth();
+      if (bio) {
+        const check = await bio.checkBiometry();
+        if (check.isAvailable) {
+          await bio.authenticate({
+            reason: 'Login to MiniTruck',
+            cancelTitle: 'Cancel',
+            allowDeviceCredential: true,
+            androidTitle: 'MiniTruck Login',
+            androidSubtitle: 'Use fingerprint to login',
+          });
 
-    // Verify biometry is still available
-    const check = await bio.checkBiometry();
-    if (!check.isAvailable) throw new Error('Biometric hardware not available');
-
-    await bio.authenticate({
-      reason: 'Login to MiniTruck',
-      cancelTitle: 'Cancel',
-      allowDeviceCredential: true,
-      androidTitle: 'MiniTruck Login',
-      androidSubtitle: 'Use your fingerprint to login',
-    });
-
-    // After successful native auth, return stored auth data
-    const authDataStr = localStorage.getItem('minitruck_auth');
-    if (authDataStr) {
-      return JSON.parse(authDataStr);
+          if (stored) {
+            // Success - return session data
+            const authData = localStorage.getItem('minitruck_auth');
+            if (authData) return JSON.parse(authData);
+            if (stored.backupAuth) return stored.backupAuth;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Native auth failed, using WebAuthn fallback', e);
     }
-    throw new Error('Please login with password once to refresh session');
   }
 
-  // WebAuthn Auth Flow (for web browser)
-  const cRes = await fetch('/api/auth/biometric/auth-challenge', {
+  // Fallback to WebAuthn (Universal)
+  if (!stored || !stored.userId) throw new Error('Setup required');
+
+  const cRes = await fetch(`${API_BASE}/auth/biometric/auth-challenge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: stored.userId, role: stored.role })
+    body: JSON.stringify({ userId: stored.userId, role })
   });
-  if (!cRes.ok) throw new Error('Biometric login not available');
-  const { challenge: serverChallenge } = await cRes.json();
+  if (!cRes.ok) throw new Error('Server error');
+  const { challenge } = await cRes.json();
 
   const assertion = await navigator.credentials.get({
     publicKey: {
-      challenge: base64urlToBuffer(serverChallenge),
+      challenge: base64urlToBuffer(challenge),
       rpId: window.location.hostname,
-      allowCredentials: [{ id: base64urlToBuffer(stored.credentialId), type: 'public-key', transports: ['internal'] }],
+      allowCredentials: [{ id: base64urlToBuffer(stored.credentialId || ''), type: 'public-key' }],
       userVerification: 'required',
       timeout: 60000
     }
   });
 
-  if (!assertion) throw new Error('Biometric verification failed');
-
-  const res = await fetch('/api/auth/biometric/authenticate', {
+  const vRes = await fetch(`${API_BASE}/auth/biometric/authenticate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       userId: stored.userId,
-      role: stored.role,
+      role,
       credentialId: stored.credentialId,
       authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
       clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
@@ -208,7 +219,7 @@ export async function authenticateWithBiometric() {
     })
   });
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Login failed');
-  return data;
+  const data = await vRes.json();
+  if (vRes.ok) return data;
+  throw new Error(data.error || 'Login failed');
 }

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import Icon from '../../components/ui/Icon';
+import { API_BASE } from '../../config/constants';
 import { isBiometricReady, hasBiometricCredential, registerBiometric, authenticateWithBiometric, removeBiometricCredential } from '../../services/biometric';
 // import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../../config/firebase';
 import { sendMockOtp } from '../../config/otpMock';
@@ -27,6 +28,8 @@ export default function LoginScreen({ role = 'customer' }) {
   const [formPass, setFormPass] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
+  const [showBioPrompt, setShowBioPrompt] = useState(false);
+  const [pendingUser, setPendingUser] = useState(null);
 
   // Biometric states
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
@@ -108,15 +111,56 @@ export default function LoginScreen({ role = 'customer' }) {
   const inputStyle = { width: '100%', padding: '12px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.inputBg, color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' };
   const labelStyle = { fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, display: 'block' };
 
-  const completeLogin = (data) => {
+  const completeLogin = async (data) => {
     // Check if driver must change password on first login
     if (data.user?.mustChangePassword) {
       setPendingChangeData(data);
       setShowPasswordChange(true);
       return;
     }
+
+    // Check if we should prompt for biometric enablement
+    const ready = await isBiometricReady();
+    const stored = hasBiometricCredential();
+    if (ready && (!stored || stored.userId !== data.user?.id)) {
+      setPendingUser(data);
+      setShowBioPrompt(true);
+      return;
+    }
+
     login({ id: data.user?.id || formId, name: data.user?.name || formId }, data.role || role, data.token);
     navigate(cfg.redirect);
+  };
+
+  const handleEnableBio = async () => {
+    if (!pendingUser) return;
+    setLoading(true);
+    try {
+      const success = await registerBiometric(pendingUser.user.id, pendingUser.role);
+      if (success) {
+        // Now finalize login
+        login({ id: pendingUser.user.id, name: pendingUser.user.name }, pendingUser.role, pendingUser.token);
+        navigate(cfg.redirect);
+      } else {
+        // Even if bio registration failed, let user login
+        login({ id: pendingUser.user.id, name: pendingUser.user.name }, pendingUser.role, pendingUser.token);
+        navigate(cfg.redirect);
+      }
+    } catch (err) {
+      console.error('Bio enable failed:', err);
+      login({ id: pendingUser.user.id, name: pendingUser.user.name }, pendingUser.role, pendingUser.token);
+      navigate(cfg.redirect);
+    }
+    setLoading(false);
+    setShowBioPrompt(false);
+  };
+
+  const handleSkipBio = () => {
+    if (pendingUser) {
+      login({ id: pendingUser.user.id, name: pendingUser.user.name }, pendingUser.role, pendingUser.token);
+      navigate(cfg.redirect);
+    }
+    setShowBioPrompt(false);
   };
 
   // OTP login timer
@@ -132,7 +176,7 @@ export default function LoginScreen({ role = 'customer' }) {
     setOtpLoginSending(true); setError('');
     try {
       // Check if account exists first
-      const checkRes = await fetch('/api/auth/lookup-phone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
+      const checkRes = await fetch(`${API_BASE}/auth/lookup-phone`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
       if (!checkRes.ok) {
         setOtpLoginSending(false);
         setError(`No ${role} account found with this number. Please register first.`);
@@ -156,11 +200,11 @@ export default function LoginScreen({ role = 'customer' }) {
       await otpLoginConfirm.confirm(otpLoginValue);
       const digits = formId.replace(/\D/g, '');
       // Get verify token first
-      const vRes = await fetch('/api/auth/verify-otp-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
+      const vRes = await fetch(`${API_BASE}/auth/verify-otp-token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
       const vData = await vRes.json();
       if (!vRes.ok) { setLoading(false); setError(vData.error || 'Verification failed'); return; }
       // Now login with verify token
-      const res = await fetch('/api/auth/login-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role, verifyToken: vData.verifyToken }) });
+      const res = await fetch(`${API_BASE}/auth/login-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role, verifyToken: vData.verifyToken }) });
       const data = await res.json();
       if (!res.ok || data.error) { setLoading(false); setError(data.error || 'Login failed'); return; }
       setLoading(false);
@@ -184,7 +228,7 @@ export default function LoginScreen({ role = 'customer' }) {
     setForgotSending(true); setForgotError('');
     try {
       // First check if account exists with this phone
-      const checkRes = await fetch('/api/auth/lookup-phone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
+      const checkRes = await fetch(`${API_BASE}/auth/lookup-phone`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
       const checkData = await checkRes.json();
       if (!checkRes.ok || !checkData.userId) {
         setForgotSending(false);
@@ -213,7 +257,7 @@ export default function LoginScreen({ role = 'customer' }) {
       await forgotOtpConfirm.confirm(forgotOtp);
       const digits = forgotPhone.replace(/\D/g, '');
       // Get verify token (proves OTP was verified)
-      const res = await fetch('/api/auth/verify-otp-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
+      const res = await fetch(`${API_BASE}/auth/verify-otp-token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, role }) });
       const data = await res.json();
       if (!res.ok) { setForgotError(data.error || 'Verification failed'); return; }
       if (data.userId) setForgotUserId(data.userId);
@@ -230,7 +274,7 @@ export default function LoginScreen({ role = 'customer' }) {
     setForgotSaving(true); setForgotError('');
     try {
       const digits = forgotPhone.replace(/\D/g, '');
-      const res = await fetch('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, newPassword: forgotNewPin, role, verifyToken: forgotVerifyToken }) });
+      const res = await fetch(`${API_BASE}/auth/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: digits, newPassword: forgotNewPin, role, verifyToken: forgotVerifyToken }) });
       const data = await res.json();
       if (!res.ok || data.error) { setForgotSaving(false); setForgotError(data.error || 'Failed'); return; }
       setForgotSaving(false);
@@ -247,7 +291,7 @@ export default function LoginScreen({ role = 'customer' }) {
     if (newPin === '1234') { setPinError('Choose a different PIN'); return; }
     setPinSaving(true);
     try {
-      const res = await fetch('/api/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pendingChangeData.user.id, oldPassword: formPass, newPassword: newPin, role }) });
+      const res = await fetch(`${API_BASE}/auth/change-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pendingChangeData.user.id, oldPassword: formPass, newPassword: newPin, role }) });
       const data = await res.json();
       if (!res.ok || data.error) { setPinSaving(false); setPinError(data.error || 'Failed'); return; }
       setPinSaving(false);
@@ -264,13 +308,13 @@ export default function LoginScreen({ role = 'customer' }) {
 
     try {
       if (step === 1 && role === 'admin' && formId && formPass) {
-        const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: formId, password: formPass, role }) });
+        const res = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: formId, password: formPass, role }) });
         const data = await res.json();
         if (!res.ok || data.error) { setLoading(false); setError('Invalid credentials'); return; }
         setLoading(false); setStep(2); return;
       }
       if (step === 1 && formId && formPass) {
-        const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: formId, password: formPass, role }) });
+        const res = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: formId, password: formPass, role }) });
         const data = await res.json();
 
         // DRIVER VERIFICATION: Handle verification errors
@@ -307,7 +351,7 @@ export default function LoginScreen({ role = 'customer' }) {
         }
         completeLogin(data);
       } else if (step === 2) {
-        const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: formId, password: formPass, role: 'admin' }) });
+        const res = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: formId, password: formPass, role: 'admin' }) });
         const data = await res.json();
         if (!res.ok || data.error) { setLoading(false); setError('Invalid credentials'); return; }
         setLoading(false);
@@ -358,7 +402,14 @@ export default function LoginScreen({ role = 'customer' }) {
   };
 
   return (
-    <div style={{ height: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', overflow: 'hidden', boxSizing: 'border-box' }}>
+    <div style={{ 
+      height: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', 
+      paddingTop: 'calc(16px + env(safe-area-inset-top))',
+      paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
+      paddingLeft: 'calc(16px + env(safe-area-inset-left))',
+      paddingRight: 'calc(16px + env(safe-area-inset-right))',
+      overflow: 'hidden', boxSizing: 'border-box' 
+    }}>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
         style={{ width: '100%', maxWidth: 400, maxHeight: '95vh', background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow, overflow: 'hidden' }}>
 
@@ -705,6 +756,28 @@ export default function LoginScreen({ role = 'customer' }) {
             </div>
           )}
         </div>
+        
+        {/* Biometric Enablement Prompt */}
+        {showBioPrompt && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 100, background: isDark ? 'rgba(9,9,11,0.98)' : 'rgba(255,255,255,0.98)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: `${clr}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+              <Icon name="fingerprint" size={36} style={{ color: clr }} />
+            </div>
+            <h3 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: '0 0 12px' }}>Enable Fingerprint?</h3>
+            <p style={{ fontSize: 13, color: C.sub, lineHeight: 1.6, margin: '0 0 32px' }}>Speed up your future logins with your device's fingerprint scanner. It's fast and secure.</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 220 }}>
+              <button onClick={handleEnableBio} disabled={loading}
+                style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: clr, color: '#FFFFFF', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                {loading ? 'Setting up...' : 'Enable Now'}
+              </button>
+              <button onClick={handleSkipBio} disabled={loading}
+                style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: 'transparent', color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   );

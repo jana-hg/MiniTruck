@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import Icon from '../../components/ui/Icon';
+import { API_BASE } from '../../config/constants';
 // import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../../config/firebase';
 import { sendMockOtp } from '../../config/otpMock';
 import { createWorker } from 'tesseract.js';
@@ -531,7 +532,7 @@ export default function DriverRegister() {
         },
       };
 
-      const res = await fetch('/api/drivers/register', {
+      const res = await fetch(`${API_BASE}/drivers/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -576,7 +577,7 @@ export default function DriverRegister() {
     if (newPassword !== confirmPassword) { setPasswordError('Passwords do not match'); return; }
     setPasswordSaving(true);
     try {
-      const res = await fetch('/api/auth/change-password', {
+      const res = await fetch(`${API_BASE}/auth/change-password`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: generatedId, oldPassword: '1234', newPassword, role: 'driver' }),
       });
@@ -756,8 +757,15 @@ export default function DriverRegister() {
           <div style={{ width: 56, height: 56, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', background: `${clr}15` }}>
             <Icon name="local_shipping" filled size={28} style={{ color: clr }} />
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, fontFamily: "'Lexend', sans-serif", color: C.text, margin: 0 }}>
-            Join MiniTruck as a Driver
+          <h1 style={{
+            fontSize: 26,
+            fontWeight: 800,
+            fontFamily: "'Lexend', sans-serif",
+            margin: '0 auto',
+            letterSpacing: '-0.8px',
+            color: isDark ? '#FFFFFF' : '#000000',
+          }}>
+            Join Mini<span style={{ fontWeight: 300, opacity: 0.85 }}>Truck</span> as a Driver
           </h1>
           <p style={{ fontSize: 13, color: C.sub, marginTop: 8, lineHeight: 1.6 }}>Register your vehicle and start earning with MiniTruck</p>
         </div>

@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { useNavigate } from 'react-router-dom';
+import { App } from '@capacitor/app';
+import { Geolocation } from '@capacitor/geolocation';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { TRUCK_TYPES, HANDLING_PROFILES, ETA_PRIORITIES } from '../../config/constants';
+import { TRUCK_TYPES, HANDLING_PROFILES, ETA_PRIORITIES, API_BASE } from '../../config/constants';
 import { bookings as bookingsApi, geo, pricing as pricingApi } from '../../services/api';
 import Icon from '../../components/ui/Icon';
 import MapView from '../../components/map/MapView';
@@ -46,10 +49,19 @@ export default function HomeBooking() {
   const [truckPrices, setTruckPrices] = useState(null); // fetched from API
 
   useEffect(() => {
-    fetch('/api/pricing/config').then(r => r.json()).then(d => {
+    fetch(`${API_BASE}/pricing/config`).then(r => r.json()).then(d => {
       if (d.trucks) setTruckPrices(d.trucks);
     }).catch(() => {});
   }, []);
+
+  // Native Hardware Back Button support for APKs
+  useEffect(() => {
+    if (!mapPicker) return;
+    const l = App.addListener('backButton', () => {
+      setMapPicker(null);
+    });
+    return () => { l.then(h => h.remove()); };
+  }, [mapPicker]);
 
   const C = {
     bg: isDark ? '#09090B' : '#F1F5F9', card: isDark ? '#18181B' : '#FFFFFF',
@@ -105,13 +117,27 @@ export default function HomeBooking() {
   };
 
   // Use current GPS location
-  const useCurrentLocation = (type) => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      pos => handleSetLocation(pos.coords.latitude, pos.coords.longitude, type),
-      () => {},
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+  const useCurrentLocation = async (type) => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const permissions = await Geolocation.checkPermissions();
+        if (permissions.location !== 'granted') {
+          const req = await Geolocation.requestPermissions();
+          if (req.location !== 'granted') return;
+        }
+        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true });
+        handleSetLocation(pos.coords.latitude, pos.coords.longitude, type);
+      } else {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+          pos => handleSetLocation(pos.coords.latitude, pos.coords.longitude, type),
+          () => {},
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      }
+    } catch (e) {
+      console.error('Location error:', e);
+    }
   };
 
   // Open Google Maps to pick a location, then user copies coords or we use Place Picker
@@ -396,60 +422,94 @@ export default function HomeBooking() {
       {/* ── Confirm Button ── */}
       <button onClick={handleBook} disabled={!pickup || !dropoff || booking}
         style={{
-          width: '100%', padding: '16px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
-          fontSize: 16, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          background: (!pickup || !dropoff) ? C.muted : C.accent,
+          width: '100%', padding: '18px 0', borderRadius: 16, border: 'none', cursor: 'pointer',
+          fontSize: 17, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+          background: (!pickup || !dropoff) ? C.muted : `linear-gradient(135deg, ${C.accent}, ${isDark ? '#F59E0B' : '#2563EB'})`,
           color: isDark ? '#000' : '#fff', opacity: booking ? 0.6 : 1,
-          boxShadow: (pickup && dropoff) ? `0 4px 16px ${C.accent}30` : 'none',
-        }}>
-        {booking ? <><Icon name="progress_activity" size={20} /> Booking...</> : <><Icon name="check_circle" size={20} /> Confirm Booking</>}
+          boxShadow: (pickup && dropoff) ? `0 8px 24px ${C.accent}40` : 'none',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          textTransform: 'uppercase', letterSpacing: '0.02em'
+        }}
+        onMouseEnter={e => { if (pickup && dropoff && !booking) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
+      >
+        {booking ? (
+          <><Icon name="progress_activity" size={22} className="animate-spin" /> Processing...</>
+        ) : (
+          <><Icon name="bolt" filled size={22} /> Confirm & Book MiniTruck</>
+        )}
       </button>
 
-      {/* ── Map Picker Modal ── */}
-      {mapPicker && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ position: 'absolute', top: 20, left: 16, right: 16, zIndex: 501, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ background: C.card, padding: '8px 16px', borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${C.border}` }}>
-              <div style={{ width: 10, height: 10, borderRadius: 5, background: mapPicker === 'pickup' ? '#10B981' : '#3B82F6' }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Set {mapPicker === 'pickup' ? 'Pickup' : 'Drop-off'}</span>
-            </div>
-            <button onClick={() => setMapPicker(null)} style={{ width: 36, height: 36, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
-              <Icon name="close" size={20} />
-            </button>
-          </div>
-
-          <div style={{ flex: 1, position: 'relative' }}>
-            <MapView
-              center={mapPickerCenter}
-              zoom={16} // High zoom for precision
-              showLocate={true}
-              mapRef={mapRef}
-              className="w-full h-full"
-            />
-
-            {/* Fixed Crosshair / Center Pin */}
-            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -100%)', zIndex: 502, pointerEvents: 'none' }}>
-              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <Icon name="location_on" filled size={48} style={{ color: mapPicker === 'pickup' ? '#10B981' : '#3B82F6', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }} />
-              </div>
-            </div>
-            
-            <div style={{ position: 'absolute', bottom: 30, left: 24, right: 24, zIndex: 502 }}>
-              <button 
-                onClick={async () => {
-                  const center = mapRef.current?.getCenter();
-                  if (center) {
-                    await handleSetLocation(center.lat, center.lng, mapPicker);
-                  }
-                  setMapPicker(null);
-                }}
-                style={{ width: '100%', padding: '16px 0', borderRadius: 14, background: '#000', color: '#FFD700', fontSize: 16, fontWeight: 800, border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.4)', letterSpacing: '0.05em' }}>
-                Confirm Location
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Map Picker Modal (Isolated for Performance) ── */}
+      <MapPickerModal
+        mapPicker={mapPicker}
+        setMapPicker={setMapPicker}
+        mapPickerCenter={mapPickerCenter}
+        mapRef={mapRef}
+        handleSetLocation={handleSetLocation}
+        C={C}
+      />
     </div>
   );
 }
+
+// ── Optimized Map Picker Modal Component ──
+const MapPickerModal = ({ mapPicker, setMapPicker, mapPickerCenter, mapRef, handleSetLocation, C }) => {
+  if (!mapPicker) return null;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', flexDirection: 'column', background: '#000' }}>
+      {/* Top Header */}
+      <div style={{ position: 'absolute', top: 'calc(20px + env(safe-area-inset-top))', left: 16, right: 16, zIndex: 501, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ background: C.card, padding: '10px 18px', borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${C.border}` }}>
+          <div style={{ width: 12, height: 12, borderRadius: 6, background: mapPicker === 'pickup' ? '#10B981' : '#3B82F6', boxShadow: `0 0 10px ${mapPicker === 'pickup' ? '#10B981' : '#3B82F6'}80` }} />
+          <span style={{ fontSize: 14, fontWeight: 800, color: C.text, letterSpacing: '-0.01em' }}>
+            Set {mapPicker === 'pickup' ? 'Pickup' : 'Drop-off'}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, position: 'relative' }}>
+        <MapView
+          center={mapPickerCenter}
+          zoom={16}
+          showLocate={true}
+          mapRef={mapRef}
+          onExit={() => setMapPicker(null)}
+          exitLabel="EXIT MAP"
+          className="w-full h-full"
+        />
+
+        {/* Center Target Marker */}
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -100%)', zIndex: 502, pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ position: 'relative' }}>
+            <Icon name="location_on" filled size={54} style={{ color: mapPicker === 'pickup' ? '#10B981' : '#3B82F6', filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.4))' }} />
+            <div style={{ position: 'absolute', bottom: 4, left: '50%', transform: 'translateX(-50%)', width: 6, height: 6, borderRadius: 3, background: 'rgba(0,0,0,0.3)', filter: 'blur(2px)' }} />
+          </div>
+        </div>
+        
+        {/* Bottom Action */}
+        <div style={{ position: 'absolute', bottom: 'calc(34px + env(safe-area-inset-bottom))', left: 24, right: 24, zIndex: 502 }}>
+          <button 
+            onClick={async () => {
+              const center = mapRef.current?.getCenter();
+              if (center) {
+                await handleSetLocation(center.lat, center.lng, mapPicker);
+              }
+              setMapPicker(null);
+            }}
+            style={{ 
+              width: '100%', padding: '18px 0', borderRadius: 16, border: 'none', cursor: 'pointer',
+              background: '#FFFFFF', color: '#000000', fontSize: 16, fontWeight: 900, 
+              boxShadow: '0 12px 40px rgba(0,0,0,0.5)', letterSpacing: '0.05em', textTransform: 'uppercase'
+            }}>
+            Confirm Selection
+          </button>
+          <div style={{ textAlign: 'center', marginTop: 12, color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: 600, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+            DRAG MAP TO ADJUST PIN
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -61,7 +61,7 @@ export default function AdminDashboard() {
     trucksApi.getTrucks().then(d => Array.isArray(d) && setTrucksList(d)).catch(() => { });
     paymentsApi.getPayments().then(d => Array.isArray(d) && setPaymentsList(d)).catch(() => { });
     fleetApi.getFleet().then(d => Array.isArray(d) && setFleetData(d)).catch(() => { });
-    fetch('/api/users').then(r => r.json()).then(d => Array.isArray(d) && setUsers(d)).catch(() => { });
+    fetch(`${API_BASE}/users`).then(r => r.json()).then(d => Array.isArray(d) && setUsers(d)).catch(() => { });
     supportApi.getTickets({}).then(d => Array.isArray(d) && setSupportTickets(d)).catch(() => { });
   }, []);
 
@@ -666,7 +666,7 @@ function DriversTab({ driversList, C, isDark, mob }) {
 
   const refreshDrivers = async () => {
     try {
-      const res = await fetch('/api/drivers');
+      const res = await fetch(`${API_BASE}/drivers`);
       const data = await res.json();
       if (Array.isArray(data)) setDrivers(data);
     } catch (e) { console.error(e); }
@@ -729,10 +729,10 @@ function DriversTab({ driversList, C, isDark, mob }) {
       }
       if (editDriver) {
         // On edit, recalculate missing
-        const updated = await (await fetch(`/api/drivers/${editDriver.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })).json();
+        const updated = await (await fetch(`${API_BASE}/drivers/${editDriver.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })).json();
         setDrivers(prev => prev.map(d => d.id === editDriver.id ? { ...d, ...updated } : d));
       } else {
-        const created = await (await fetch('/api/drivers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })).json();
+        const created = await (await fetch(`${API_BASE}/drivers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })).json();
         setDrivers(prev => [...prev, created]);
       }
       setShowAdd(false);
@@ -1067,7 +1067,7 @@ function TrucksTab({ trucksList, C, isDark, mob }) {
         const updated = await (await fetch(`/api/trucks/${editTruck.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })).json();
         setTruckItems(prev => prev.map(t => t.id === editTruck.id ? { ...t, ...updated } : t));
       } else {
-        const created = await (await fetch('/api/trucks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, id: form.label.toLowerCase().replace(/\s+/g, '-'), active: true }) })).json();
+        const created = await (await fetch(`${API_BASE}/trucks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, id: form.label.toLowerCase().replace(/\s+/g, '-'), active: true }) })).json();
         setTruckItems(prev => [...prev, created]);
       }
       setShowAdd(false);
@@ -1166,7 +1166,7 @@ function PricingSection({ C, isDark, mob }) {
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    fetch('/api/pricing/config').then(r => r.json()).then(setConfig).catch(() => { });
+    fetch(`${API_BASE}/pricing/config`).then(r => r.json()).then(setConfig).catch(() => { });
   }, []);
 
   if (!config) return null;
@@ -1179,7 +1179,7 @@ function PricingSection({ C, isDark, mob }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await fetch('/api/pricing/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+      await fetch(`${API_BASE}/pricing/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) { console.error(e); }
@@ -1395,7 +1395,7 @@ function PricingTab_unused({ C, isDark, mob }) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    fetch('/api/pricing/config').then(r => r.json()).then(setConfig).catch(() => { });
+    fetch(`${API_BASE}/pricing/config`).then(r => r.json()).then(setConfig).catch(() => { });
   }, []);
 
   if (!config) return <div style={{ padding: 48, textAlign: 'center', color: C.muted }}>Loading pricing config...</div>;
@@ -1408,7 +1408,7 @@ function PricingTab_unused({ C, isDark, mob }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await fetch('/api/pricing/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+      await fetch(`${API_BASE}/pricing/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) { console.error(e); }
@@ -1757,7 +1757,7 @@ function DatabaseTab({ C, isDark, mob, user, dbAccessToken, setDbAccessToken, db
     setDbOtpStep('sending');
     try {
       const auth = JSON.parse(localStorage.getItem('minitruck_auth') || '{}');
-      await fetch('/api/admin/db-otp/send', { method: 'POST', headers: { 'Authorization': `Bearer ${auth.token}` } });
+      await fetch(`${API_BASE}/admin/db-otp/send`, { method: 'POST', headers: { 'Authorization': `Bearer ${auth.token}` } });
       setDbOtpStep('verifying');
     } catch (err) { console.error(err); setDbOtpStep('idle'); alert('Failed to send OTP'); }
   };
@@ -1766,7 +1766,7 @@ function DatabaseTab({ C, isDark, mob, user, dbAccessToken, setDbAccessToken, db
     setDbOtpStep('sending');
     try {
       const auth = JSON.parse(localStorage.getItem('minitruck_auth') || '{}');
-      const res = await fetch('/api/admin/db-otp/verify', {
+      const res = await fetch(`${API_BASE}/admin/db-otp/verify`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: user?.phone || '9999999999', otp: dbOtpInput })

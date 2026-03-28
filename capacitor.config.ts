@@ -1,23 +1,24 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
+// Determine if we are building for customer or driver
+const isDriver = process.env.CAP_MODE === 'driver' || process.env.npm_lifecycle_event?.includes('driver');
+
 const config: CapacitorConfig = {
-  appId: 'com.minitruck.customer',
-  appName: 'MiniTruck',
-  webDir: 'dist-customer',
+  appId: isDriver ? 'com.minitruck.captain' : 'com.minitruck.customer',
+  appName: isDriver ? 'MiniTruck Captain' : 'MiniTruck',
+  webDir: isDriver ? 'dist-driver' : 'dist-customer',
   server: {
     androidScheme: 'https',
-    // Using Smart Wrapper approach instead of direct redirect.
-    // url: 'https://minitruck-app.vercel.app',
     cleartext: true,
   },
   android: {
-    path: 'android-customer',
+    path: isDriver ? 'android-driver' : 'android-customer',
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2500,
+      launchShowDuration: 0,
       launchAutoHide: true,
-      backgroundColor: '#3B82F6',
+      backgroundColor: '#FFFFFF',
       showSpinner: false,
       androidSpinnerStyle: 'small',
       iosSpinnerStyle: 'small',

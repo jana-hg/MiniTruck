@@ -59,8 +59,17 @@ export default function PortalSwitcher() {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
           <AppIcon size={52} />
         </div>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, margin: '0 0 6px', letterSpacing: '-0.02em' }}>MiniTruck</h1>
-        <p style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>Select your portal to continue</p>
+        <div style={{
+          fontSize: 32,
+          fontWeight: 800,
+          margin: '0 auto 6px',
+          letterSpacing: '-1px',
+          fontFamily: "'Lexend', sans-serif",
+          color: isDark ? '#FFFFFF' : '#000000',
+        }}>
+          Mini<span style={{ fontWeight: 300, opacity: 0.85 }}>Truck</span>
+        </div>
+        <p style={{ fontSize: 12, color: isDark ? '#A1A1AA' : '#475569', fontWeight: 500 }}>Select your portal to continue</p>
       </motion.div>
 
       {/* Portal Cards */}

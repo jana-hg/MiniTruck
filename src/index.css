@@ -102,6 +102,7 @@ html {
   scroll-behavior: smooth;
   overflow-y: scroll !important;
   overflow-x: hidden;
+  background-color: var(--bg);
 }
 
 body {
@@ -112,11 +113,18 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.2s ease, color 0.2s ease;
+  /* Prevent scrolling issues on mobile */
+  overscroll-behavior-y: none;
+  /* native app feel */
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #root {
   min-height: 100vh;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ═══════════════════════════════════════
