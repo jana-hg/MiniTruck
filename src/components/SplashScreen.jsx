@@ -55,12 +55,9 @@ export default function SplashScreen() {
           transition={{ delay: 0.3 }}
           style={{
             fontSize: 32,
-            fontWeight: 900,
+            fontWeight: 800,
             fontFamily: "'Lexend', sans-serif",
-            background: 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
+            color: textColor,
             margin: 0,
             marginBottom: 8,
             textAlign: 'center',
