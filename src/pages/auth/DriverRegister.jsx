@@ -757,10 +757,10 @@ export default function DriverRegister() {
             <Icon name="local_shipping" filled size={28} style={{ color: clr }} />
           </div>
           <h1 style={{
-            fontSize: 26, fontWeight: 900, fontFamily: "'Lexend', sans-serif",
-            background: `linear-gradient(135deg, ${clr} 0%, ${isDark ? '#fff' : '#000'} 180%)`,
+            fontFamily: "'Lexend', sans-serif", fontWeight: 900, fontSize: 26,
+            background: 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2
+            backgroundClip: 'text', margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2
           }}>
             Join MiniTruck as a Driver
           </h1>

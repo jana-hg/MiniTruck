@@ -54,14 +54,17 @@ export default function SplashScreen() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           style={{
-            fontSize: 28,
-            fontWeight: 700,
-            color: textColor,
+            fontSize: 32,
+            fontWeight: 900,
+            fontFamily: "'Lexend', sans-serif",
+            background: 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
             margin: 0,
             marginBottom: 8,
             textAlign: 'center',
-            letterSpacing: '-0.01em',
-            textShadow: isDark ? '0 2px 10px rgba(0,0,0,0.5)' : 'none'
+            letterSpacing: '-0.02em',
           }}
         >
           {isDriver ? 'MiniTruck Captain' : 'MiniTruck'}

@@ -363,12 +363,20 @@ export default function LoginScreen({ role = 'customer' }) {
         style={{ width: '100%', maxWidth: 400, maxHeight: '95vh', background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow, overflow: 'hidden' }}>
 
         {/* Header */}
-        <div style={{ padding: '24px 24px 20px', textAlign: 'center' }}>
-          <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', background: `${clr}15` }}>
-            <Icon name={cfg.icon} filled size={24} style={{ color: clr }} />
+        <div style={{ padding: '24px 24px 10px', textAlign: 'center' }}>
+          <h1 style={{
+            fontFamily: "'Lexend', sans-serif", fontWeight: 900, fontSize: 32,
+            background: 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text', margin: '0 0 16px', letterSpacing: '-0.02em'
+          }}>
+            MiniTruck
+          </h1>
+          <div style={{ width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', background: `${clr}15` }}>
+            <Icon name={cfg.icon} filled size={22} style={{ color: clr }} />
           </div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0 }}>{cfg.title}</h2>
-          <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Enter your credentials</p>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>{cfg.title}</h2>
+          <p style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>Enter your credentials to continue</p>
         </div>
 
         {/* Form */}
