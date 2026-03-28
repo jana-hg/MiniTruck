@@ -272,12 +272,7 @@ export default function UserRegister() {
           <div style={{ width: 56, height: 56, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', background: `${clr}15` }}>
             <Icon name="person" filled size={28} style={{ color: clr }} />
           </div>
-          <h1 style={{
-            fontFamily: "'Lexend', sans-serif", fontWeight: 900, fontSize: 32,
-            background: 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text', margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2
-          }}>
+          <h1 style={{ fontSize: 26, fontWeight: 900, fontFamily: "'Lexend', sans-serif", color: C.text, margin: 0 }}>
             Welcome to MiniTruck!
           </h1>
           <p style={{ fontSize: 13, color: C.sub, marginTop: 8, lineHeight: 1.6 }}>
