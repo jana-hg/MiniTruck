@@ -272,7 +272,14 @@ export default function UserRegister() {
           <div style={{ width: 56, height: 56, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', background: `${clr}15` }}>
             <Icon name="person" filled size={28} style={{ color: clr }} />
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: 0 }}>Welcome to MiniTruck!</h1>
+          <h1 style={{
+            fontSize: 26, fontWeight: 900, fontFamily: "'Lexend', sans-serif",
+            background: `linear-gradient(135deg, ${clr} 0%, ${isDark ? '#fff' : '#000'} 180%)`,
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2
+          }}>
+            Welcome to MiniTruck!
+          </h1>
           <p style={{ fontSize: 13, color: C.sub, marginTop: 8, lineHeight: 1.6 }}>
             {currentStep === 1 ? 'Create your account to book trucks instantly' : 'Set a 4-digit PIN to secure your account'}
           </p>

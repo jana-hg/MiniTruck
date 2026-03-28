@@ -5,7 +5,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>MiniTruck | Precision Truck Booking</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Lexend:wght@700;800;900&display=swap" rel="stylesheet" />
     <style>
       :root {
         --primary: #3B82F6;
@@ -21,6 +21,25 @@
         color: white;
       }
 
+      .welcome-text {
+        font-family: 'Lexend', sans-serif;
+        font-weight: 800;
+        font-size: 26px;
+        text-align: center;
+        letter-spacing: 0.05em;
+        margin-bottom: 40px;
+        background: linear-gradient(135deg, #fff 0%, #3B82F6 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: fadeInDown 0.8s ease-out;
+      }
+
+      @keyframes fadeInDown {
+        0% { opacity: 0; transform: translateY(-20px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
+
       /* Smart Redirect Loader */
       #smart-loader {
         position: fixed;
@@ -32,6 +51,12 @@
         justify-content: center;
         z-index: 9999;
         transition: opacity 0.5s ease;
+      }
+
+      #loading-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
       }
 
       /* Offline UI - Glassmorphic */
@@ -107,6 +132,7 @@
   <body>
     <div id="smart-loader">
       <div id="loading-box">
+        <h2 class="welcome-text">WELCOME TO MINITRUCK</h2>
         <div class="spinner"></div>
       </div>
 
