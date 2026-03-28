@@ -32,6 +32,15 @@
         animation: fadeInDown 0.8s ease-out;
       }
 
+      @media (prefers-color-scheme: light) {
+        body, html {
+          background-color: #F8FAFC;
+        }
+        .welcome-text {
+          color: #0F172A;
+        }
+      }
+
       @keyframes fadeInDown {
         0% { opacity: 0; transform: translateY(-20px); }
         100% { opacity: 1; transform: translateY(0); }
