@@ -119,7 +119,7 @@ function LocateButton({ onLocate }) {
   };
 
   return (
-    <div className="leaflet-top leaflet-right" style={{ marginTop: 10, marginRight: 10 }}>
+    <div className="leaflet-top leaflet-right" style={{ marginTop: 'calc(10px + env(safe-area-inset-top, 0px))', marginRight: 10 }}>
       <div className="leaflet-control">
         <button
           onClick={handleLocate}
@@ -203,7 +203,7 @@ export default function MapView({
       {showLocate && <LocateButton onLocate={setUserLocation} />}
       
       {onExit && (
-        <div className="leaflet-top leaflet-left" style={{ marginTop: 10, marginLeft: 10 }}>
+        <div className="leaflet-top leaflet-left" style={{ marginTop: 'calc(10px + env(safe-area-inset-top, 0px))', marginLeft: 10 }}>
           <div className="leaflet-control">
             <button
               onClick={onExit}

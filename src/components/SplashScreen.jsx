@@ -4,17 +4,21 @@ import { usePlatform } from '../context/PlatformContext';
 import { useTheme } from '../context/ThemeContext';
 import AppIcon from './ui/AppIcon';
 
+// Track globally so splash only shows once per app session
+let hasShownSplash = false;
+
 export default function SplashScreen() {
   const { isCustomer, isDriver } = usePlatform();
   const { isDark } = useTheme();
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(() => !hasShownSplash);
 
   const bgColor = isDark ? '#000000' : '#FFFFFF';
   const textColor = isDark ? '#FFFFFF' : '#0F172A';
   const subColor = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(15, 23, 42, 0.6)';
 
   useEffect(() => {
-    // Show splash screen for exactly 2 seconds before fading out beautifully
+    if (hasShownSplash) return;
+    hasShownSplash = true;
     const timer = setTimeout(() => setIsVisible(false), 1000);
     return () => clearTimeout(timer);
   }, []);

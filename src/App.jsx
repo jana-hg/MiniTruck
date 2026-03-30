@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { PlatformProvider } from './context/PlatformContext';
 import { DataSyncProvider } from './context/DataSyncContext';
 import { Capacitor } from '@capacitor/core';
+import { App as CapApp } from '@capacitor/app';
 import { SplashScreen as CapSplash } from '@capacitor/splash-screen';
 import { useEffect } from 'react';
 
@@ -56,6 +57,21 @@ function AppRoutes() {
     // Hide native splash screen immediately when React app starts
     if (Capacitor.isNativePlatform()) {
       CapSplash.hide();
+    }
+
+    // Handle Android back button — prevent logout by going back to login
+    if (Capacitor.isNativePlatform()) {
+      const listener = CapApp.addListener('backButton', ({ canGoBack }) => {
+        // If on a main page (home, bookings, etc.) and authenticated, minimize app instead of going back
+        if (!canGoBack || window.location.pathname === '/' || window.location.pathname === '/driver' ||
+            window.location.pathname.startsWith('/login') || window.location.pathname === '/login-user' ||
+            window.location.pathname === '/login-driver') {
+          CapApp.minimizeApp();
+        } else {
+          window.history.back();
+        }
+      });
+      return () => { listener.then(h => h.remove()); };
     }
   }, []);
 

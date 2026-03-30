@@ -59,9 +59,9 @@ app.use(cors({
 app.use(bodyParser.json({ limit: '1mb' }));
 
 // Rate limiting
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: 'Too many requests, try again later' } });
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, message: { error: 'Too many requests, try again later' } });
 app.use('/api', limiter);
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many login attempts' } });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { error: 'Too many login attempts' } });
 app.use('/api/auth', authLimiter);
 
 // ── Database helpers ──
@@ -173,7 +173,7 @@ function generateBookingId() {
 // ═══════════════════════════════════════════════════════════════
 //  OTP
 // ═══════════════════════════════════════════════════════════════
-const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many OTP requests' } });
+const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50, message: { error: 'Too many OTP requests' } });
 
 app.post('/api/otp/send', otpLimiter, async (req, res) => {
   const { phone } = req.body;

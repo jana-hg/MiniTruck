@@ -5,13 +5,13 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    host: true,
+    port: 5173,
     proxy: {
-      '/api': 'http://localhost:5005'
+      '/api': 'http://127.0.0.1:5005'
     }
   },
   build: {
-    rollupOptions: {
-      external: ['capacitor-biometric-auth']
-    }
+    chunkSizeWarningLimit: 1000
   }
 })

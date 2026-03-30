@@ -21,6 +21,7 @@ export default function MyBookings() {
   const [ratingComment, setRatingComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState(null);
+  const [confirmCancelId, setConfirmCancelId] = useState(null);
   const [invoiceBooking, setInvoiceBooking] = useState(null);
   const [trackingId, setTrackingId] = useState(null);
   const [driverLoc, setDriverLoc] = useState(null);
@@ -85,10 +86,15 @@ export default function MyBookings() {
   };
 
   const handleCancel = (id) => {
-    if (!window.confirm('Are you sure you want to cancel this booking?')) return;
-    setCancellingId(id);
-    bookingsApi.updateBooking(id, { status: 'cancelled' })
-      .then(() => setBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b)))
+    setConfirmCancelId(id);
+  };
+
+  const confirmCancel = () => {
+    if (!confirmCancelId) return;
+    setCancellingId(confirmCancelId);
+    setConfirmCancelId(null);
+    bookingsApi.updateBooking(confirmCancelId, { status: 'cancelled' })
+      .then(() => setBookings(prev => prev.map(b => b.id === confirmCancelId ? { ...b, status: 'cancelled' } : b)))
       .finally(() => setCancellingId(null));
   };
 
@@ -339,6 +345,33 @@ export default function MyBookings() {
           );
         })}
       </div>
+
+      {/* Cancel Confirmation Modal */}
+      {confirmCancelId && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', padding: 16 }} onClick={() => setConfirmCancelId(null)}>
+          <div style={{ ...box, width: '100%', maxWidth: 360, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: isDark ? 'rgba(239,68,68,0.1)' : '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="cancel" size={22} style={{ color: '#EF4444' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Cancel Booking?</div>
+                <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>This action cannot be undone</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmCancelId(null)}
+                style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Keep Booking
+              </button>
+              <button onClick={confirmCancel}
+                style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rating Modal */}
       {ratingModal && (

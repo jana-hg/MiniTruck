@@ -82,11 +82,14 @@ export default function LoginScreen({ role = 'customer' }) {
             setBiometricLoading(true);
             try {
               const data = await authenticateWithBiometric();
-              login({ id: data.user?.id, name: data.user?.name }, data.role || role, data.token);
-              navigate(cfg.redirect);
+              if (data && (data.user || data.token)) {
+                login({ id: data.user?.id, name: data.user?.name }, data.role || role, data.token);
+                navigate(cfg.redirect);
+              } else {
+                setBiometricLoading(false);
+              }
             } catch {
               setBiometricLoading(false);
-              // Silent fail — user can tap manually or use password
             }
           }
         } else {
@@ -112,24 +115,34 @@ export default function LoginScreen({ role = 'customer' }) {
   const labelStyle = { fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, display: 'block' };
 
   const completeLogin = async (data) => {
-    // Check if driver must change password on first login
-    if (data.user?.mustChangePassword) {
-      setPendingChangeData(data);
-      setShowPasswordChange(true);
-      return;
-    }
+    try {
+      // Check if driver must change password on first login
+      if (data.user?.mustChangePassword) {
+        setPendingChangeData(data);
+        setShowPasswordChange(true);
+        return;
+      }
 
-    // Check if we should prompt for biometric enablement
-    const ready = await isBiometricReady();
-    const stored = hasBiometricCredential();
-    if (ready && (!stored || stored.userId !== data.user?.id)) {
-      setPendingUser(data);
-      setShowBioPrompt(true);
-      return;
-    }
+      // Check if we should prompt for biometric enablement (with timeout protection)
+      try {
+        const ready = await isBiometricReady();
+        const stored = hasBiometricCredential();
+        if (ready && (!stored || stored.userId !== data.user?.id)) {
+          setPendingUser(data);
+          setShowBioPrompt(true);
+          return;
+        }
+      } catch {
+        // Biometric check failed — skip prompt and proceed with login
+      }
 
-    login({ id: data.user?.id || formId, name: data.user?.name || formId }, data.role || role, data.token);
-    navigate(cfg.redirect);
+      login({ id: data.user?.id || formId, name: data.user?.name || formId }, data.role || role, data.token);
+      navigate(cfg.redirect);
+    } catch {
+      // Fallback: just login even if something unexpected fails
+      login({ id: data.user?.id || formId, name: data.user?.name || formId }, data.role || role, data.token);
+      navigate(cfg.redirect);
+    }
   };
 
   const handleEnableBio = async () => {

@@ -117,26 +117,73 @@ export default function HomeBooking() {
   };
 
   // Use current GPS location
+  const [locError, setLocError] = useState('');
+  const [locLoading, setLocLoading] = useState(false);
   const useCurrentLocation = async (type) => {
-    try {
-      if (Capacitor.isNativePlatform()) {
+    setLocError('');
+    setLocLoading(true);
+
+    const onSuccess = (lat, lng) => {
+      handleSetLocation(lat, lng, type);
+      setLocLoading(false);
+    };
+    const onFail = (msg) => {
+      setLocError(msg || 'Could not get location.');
+      setLocLoading(false);
+    };
+
+    // Step 1: Request permission if native
+    if (Capacitor.isNativePlatform()) {
+      try {
         const permissions = await Geolocation.checkPermissions();
         if (permissions.location !== 'granted') {
           const req = await Geolocation.requestPermissions();
-          if (req.location !== 'granted') return;
+          if (req.location !== 'granted') {
+            // Try browser fallback before giving up
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                pos => onSuccess(pos.coords.latitude, pos.coords.longitude),
+                () => onFail('Location permission denied. Enable in Settings.'),
+                { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+              );
+              return;
+            }
+            onFail('Location permission denied. Enable in Settings.');
+            return;
+          }
         }
-        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true });
-        handleSetLocation(pos.coords.latitude, pos.coords.longitude, type);
-      } else {
-        if (!navigator.geolocation) return;
-        navigator.geolocation.getCurrentPosition(
-          pos => handleSetLocation(pos.coords.latitude, pos.coords.longitude, type),
-          () => {},
-          { enableHighAccuracy: true, timeout: 10000 }
-        );
+      } catch (e) {
+        console.warn('Permission check failed:', e);
       }
-    } catch (e) {
-      console.error('Location error:', e);
+
+      // Step 2: Try Capacitor network location (fast)
+      try {
+        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 8000 });
+        onSuccess(pos.coords.latitude, pos.coords.longitude);
+        return;
+      } catch (e) {
+        console.warn('Capacitor network location failed:', e);
+      }
+
+      // Step 3: Try Capacitor GPS (slower)
+      try {
+        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 });
+        onSuccess(pos.coords.latitude, pos.coords.longitude);
+        return;
+      } catch (e) {
+        console.warn('Capacitor GPS failed:', e);
+      }
+    }
+
+    // Step 4: Browser navigator.geolocation fallback
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => onSuccess(pos.coords.latitude, pos.coords.longitude),
+        () => onFail('Could not get location. Enable location services.'),
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+      );
+    } else {
+      onFail('Location not supported on this device.');
     }
   };
 
@@ -209,6 +256,7 @@ export default function HomeBooking() {
           </div>
           {dropoffResults.length > 0 && <div style={dropStyle}>{dropoffResults.map((r, i) => <button key={i} onClick={() => selectLocation(r, 'dropoff')} style={dropBtn}>{r.display_name}</button>)}</div>}
         </div>
+        {locError && <div style={{ fontSize: 11, color: '#EF4444', fontWeight: 600, padding: '6px 0 2px', display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="error" size={14} />{locError}</div>}
         {/* Route info */}
         {routeData && (
           <div style={{ display: 'flex', gap: 8, marginTop: 12, fontSize: 12, color: C.sub, flexWrap: 'wrap' }}>
@@ -422,21 +470,22 @@ export default function HomeBooking() {
       {/* ── Confirm Button ── */}
       <button onClick={handleBook} disabled={!pickup || !dropoff || booking}
         style={{
-          width: '100%', padding: '18px 0', borderRadius: 16, border: 'none', cursor: 'pointer',
-          fontSize: 17, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-          background: (!pickup || !dropoff) ? C.muted : `linear-gradient(135deg, ${C.accent}, ${isDark ? '#F59E0B' : '#2563EB'})`,
-          color: isDark ? '#000' : '#fff', opacity: booking ? 0.6 : 1,
-          boxShadow: (pickup && dropoff) ? `0 8px 24px ${C.accent}40` : 'none',
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-          textTransform: 'uppercase', letterSpacing: '0.02em'
+          width: '100%', padding: '16px 24px', borderRadius: 14, border: 'none', cursor: (!pickup || !dropoff || booking) ? 'default' : 'pointer',
+          fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          background: (!pickup || !dropoff) ? (isDark ? '#27272A' : '#E2E8F0') : C.accent,
+          color: (!pickup || !dropoff) ? (isDark ? '#52525B' : '#94A3B8') : (isDark ? '#000' : '#fff'),
+          opacity: booking ? 0.7 : 1,
+          boxShadow: (pickup && dropoff && !booking) ? `0 4px 14px ${C.accent}30` : 'none',
+          transition: 'all 0.15s ease',
+          letterSpacing: '0.01em'
         }}
-        onMouseEnter={e => { if (pickup && dropoff && !booking) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+        onMouseEnter={e => { if (pickup && dropoff && !booking) e.currentTarget.style.transform = 'translateY(-1px)'; }}
         onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
       >
         {booking ? (
-          <><Icon name="progress_activity" size={22} className="animate-spin" /> Processing...</>
+          <><Icon name="progress_activity" size={18} className="animate-spin" /> Booking...</>
         ) : (
-          <><Icon name="bolt" filled size={22} /> Confirm & Book MiniTruck</>
+          <><Icon name="local_shipping" filled size={18} /> Confirm Booking</>
         )}
       </button>
 

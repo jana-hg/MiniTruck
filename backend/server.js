@@ -19,14 +19,14 @@ const DB_PATH = path.join(__dirname, 'db.json');
 
 // ── Security middleware ──
 app.use(helmet({ contentSecurityPolicy: false }));
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || 'https://minitruck-app.vercel.app,http://localhost:5173,http://localhost:3000').split(',');
-app.use(cors({ origin: (origin, cb) => { if (!origin || ALLOWED_ORIGINS.includes(origin)) cb(null, true); else cb(new Error('CORS not allowed')); }, credentials: true }));
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || 'https://minitruck-app.vercel.app,http://localhost:5173,http://localhost:3000,http://localhost,capacitor://localhost').split(',');
+app.use(cors({ origin: (origin, cb) => { if (!origin || ALLOWED_ORIGINS.includes(origin) || origin.startsWith('http://localhost') || origin.startsWith('capacitor://localhost')) cb(null, true); else cb(new Error('CORS not allowed')); }, credentials: true }));
 app.use(bodyParser.json({ limit: '1mb' }));
 
 // Rate limiting
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: 'Too many requests, try again later' } });
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, message: { error: 'Too many requests, try again later' } });
 app.use('/api', limiter);
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many login attempts' } });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { error: 'Too many login attempts' } });
 app.use('/api/auth', authLimiter);
 
 // ── Frontend dist path ──
@@ -90,7 +90,7 @@ function generateBookingId() {
 // ═══════════════════════════════════════════════════════════════
 //  OTP
 // ═══════════════════════════════════════════════════════════════
-const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many OTP requests' } });
+const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50, message: { error: 'Too many OTP requests' } });
 
 app.post('/api/otp/send', otpLimiter, async (req, res) => {
   const { phone } = req.body;
@@ -178,7 +178,8 @@ app.post('/api/auth/biometric/authenticate', async (req, res) => {
   if (authenticatorData && clientDataJSON && signature) {
     try {
       // Decode the clientDataJSON to verify challenge and origin
-      const clientDataBuffer = Buffer.from(clientDataJSON, 'base64');
+      const base64 = clientDataJSON.replace(/-/g, '+').replace(/_/g, '/');
+      const clientDataBuffer = Buffer.from(base64, 'base64');
       const clientData = JSON.parse(clientDataBuffer.toString('utf-8'));
 
       // Verify the challenge matches

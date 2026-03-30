@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { Geolocation } from '@capacitor/geolocation';
 import { drivers as driversApi, bookings as bookingsApi, geo } from '../../services/api';
 import Icon from '../../components/ui/Icon';
 
@@ -97,27 +98,67 @@ export default function DriverHome() {
     }
   };
 
-  const confirmGoOnline = () => {
-    if (!navigator.geolocation) {
-      setLocPopup(false);
-      return;
-    }
+  const confirmGoOnline = async () => {
     setToggling(true);
     setLocPopup(false);
+
+    const onSuccess = (lat, lng) => {
+      setDriverLoc({ lat, lng });
+      driversApi.updateLocation(user.id, lat, lng).catch(() => {});
+      driversApi.toggleAvailability(user.id, { available: true })
+        .then(d => { setAvailable(d.available); setDriver(d); })
+        .finally(() => setToggling(false));
+    };
+
+    const onFail = () => {
+      setToggling(false);
+      setLocPopup('denied');
+    };
+
+    // Step 1: Request permission via Capacitor plugin
+    try {
+      const permissions = await Geolocation.checkPermissions();
+      if (permissions.location !== 'granted') {
+        const req = await Geolocation.requestPermissions();
+        if (req.location !== 'granted') {
+          // Permission truly denied — try browser as last resort
+          getLocationViaBrowser(onSuccess, onFail);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Permission check failed:', e);
+    }
+
+    // Step 2: Get location — try multiple methods
+    // Method A: Capacitor plugin with network location (fast)
+    try {
+      const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 8000 });
+      onSuccess(pos.coords.latitude, pos.coords.longitude);
+      return;
+    } catch (e) {
+      console.warn('Capacitor network location failed:', e);
+    }
+
+    // Method B: Capacitor plugin with GPS (slower but more accurate)
+    try {
+      const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 });
+      onSuccess(pos.coords.latitude, pos.coords.longitude);
+      return;
+    } catch (e) {
+      console.warn('Capacitor GPS failed:', e);
+    }
+
+    // Method C: Browser navigator.geolocation (WebView fallback)
+    getLocationViaBrowser(onSuccess, onFail);
+  };
+
+  const getLocationViaBrowser = (onSuccess, onFail) => {
+    if (!navigator.geolocation) { onFail(); return; }
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setDriverLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        driversApi.updateLocation(user.id, pos.coords.latitude, pos.coords.longitude).catch(() => {});
-        driversApi.toggleAvailability(user.id, { available: true })
-          .then(d => { setAvailable(d.available); setDriver(d); })
-          .finally(() => setToggling(false));
-      },
-      () => {
-        setToggling(false);
-        // Location denied — show popup again with error
-        setLocPopup('denied');
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
+      pos => onSuccess(pos.coords.latitude, pos.coords.longitude),
+      () => onFail(),
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
     );
   };
 
@@ -173,18 +214,30 @@ export default function DriverHome() {
 
   // Only track & send location when driver is ONLINE
   useEffect(() => {
-    if (!available || !user?.id || !navigator.geolocation) return;
+    if (!available || !user?.id) return;
     let watchId;
     const sendLocation = (lat, lng) => {
       setDriverLoc({ lat, lng });
       driversApi.updateLocation(user.id, lat, lng).catch(() => {});
     };
-    watchId = navigator.geolocation.watchPosition(
-      pos => sendLocation(pos.coords.latitude, pos.coords.longitude),
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 5000 }
-    );
-    return () => { if (watchId != null) navigator.geolocation.clearWatch(watchId); };
+
+    const startWatch = async () => {
+      try {
+        watchId = await Geolocation.watchPosition(
+          { enableHighAccuracy: true, maximumAge: 5000 },
+          (pos) => {
+            if (pos && pos.coords) {
+              sendLocation(pos.coords.latitude, pos.coords.longitude);
+            }
+          }
+        );
+      } catch (e) {
+        console.error('Watch location error:', e);
+      }
+    };
+    
+    startWatch();
+    return () => { if (watchId) Geolocation.clearWatch({ id: watchId }); };
   }, [available, user?.id]);
 
   const stats = driver?.stats || {};

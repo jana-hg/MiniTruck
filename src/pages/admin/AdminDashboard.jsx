@@ -957,13 +957,17 @@ function DriversTab({ driversList, C, isDark, mob }) {
             {/* Vehicle Type */}
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vehicle Type *</label>
-              <select value={form.truckType} onChange={e => setForm(p => ({ ...p, truckType: e.target.value }))}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: isDark ? '#09090B' : '#F8FAFC', color: C.text, fontSize: 13, outline: 'none' }}>
-                <option value="" disabled>Select vehicle type</option>
-                <option value="mini_truck_500kg">Mini Truck (500KG)</option>
-                <option value="box_truck_2.5t">Box Truck (2.5T)</option>
-                <option value="heavy_duty_10t">Heavy Duty (10T+)</option>
-              </select>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {[{ v: 'mini_truck_500kg', l: 'Mini Truck (500KG)' }, { v: 'box_truck_2.5t', l: 'Box Truck (2.5T)' }, { v: 'heavy_duty_10t', l: 'Heavy Duty (10T+)' }].map(t => (
+                  <button key={t.v} type="button" onClick={() => setForm(p => ({ ...p, truckType: t.v }))}
+                    style={{ padding: '10px 14px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      border: `1.5px solid ${form.truckType === t.v ? C.accent : C.border}`,
+                      background: form.truckType === t.v ? `${C.accent}15` : 'transparent',
+                      color: form.truckType === t.v ? C.accent : C.sub }}>
+                    {t.l}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Vehicle Brand - Grid Selection */}

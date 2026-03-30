@@ -28,9 +28,19 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Update biometric backup before clearing session
+    // so fingerprint login can restore the session after logout
+    try {
+      const bioStr = localStorage.getItem('minitruck_biometric');
+      const authStr = localStorage.getItem('minitruck_auth');
+      if (bioStr && authStr) {
+        const bio = JSON.parse(bioStr);
+        bio.backupAuth = JSON.parse(authStr);
+        localStorage.setItem('minitruck_biometric', JSON.stringify(bio));
+      }
+    } catch {}
     localStorage.removeItem('minitruck_auth');
-    localStorage.removeItem('minitruck_biometric');
-    localStorage.removeItem('minitruck_bio_cred');
+    // Keep minitruck_biometric so fingerprint login works after logout
     setAuth(null);
   }, []);
 

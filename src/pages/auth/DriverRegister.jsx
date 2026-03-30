@@ -954,13 +954,17 @@ export default function DriverRegister() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={labelStyle}>Vehicle Type *</label>
-                <select value={form.vehicleType} onChange={set('vehicleType')} required
-                  style={{ ...inputStyle, appearance: 'auto', cursor: 'pointer', color: form.vehicleType ? C.text : C.muted }}>
-                  <option value="" disabled>Select vehicle type</option>
-                  <option value="mini_truck_500kg">Mini Truck (500KG)</option>
-                  <option value="box_truck_2.5t">Box Truck (2.5T)</option>
-                  <option value="heavy_duty_10t">Heavy Duty (10T+)</option>
-                </select>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {[{ v: 'mini_truck_500kg', l: 'Mini Truck (500KG)' }, { v: 'box_truck_2.5t', l: 'Box Truck (2.5T)' }, { v: 'heavy_duty_10t', l: 'Heavy Duty (10T+)' }].map(t => (
+                    <button key={t.v} type="button" onClick={() => setForm(f => ({ ...f, vehicleType: t.v }))}
+                      style={{ padding: '10px 14px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        border: `1.5px solid ${form.vehicleType === t.v ? clr : C.border}`,
+                        background: form.vehicleType === t.v ? `${clr}15` : 'transparent',
+                        color: form.vehicleType === t.v ? clr : C.sub }}>
+                      {t.l}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label style={labelStyle}>Vehicle Brand *</label>

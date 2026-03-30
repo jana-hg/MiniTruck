@@ -34,12 +34,19 @@ export default function Support() {
   };
 
   const handleCategoryChange = (category) => {
-    setNewTicket({ ...newTicket, category });
+    const label = category.charAt(0).toUpperCase() + category.slice(1);
+    let message = '';
+    if (category === 'payment') {
+      message = 'I have a query regarding a payment for my recent trip. [Please provide details here]';
+    } else if (category === 'delivery') {
+      message = 'I am facing an issue with a delivery. [Please provide details here]';
+    }
+    setNewTicket({ ...newTicket, category, subject: `${label} Issue`, message });
     fetchSuggestions(category);
   };
 
   const handleSuggestionClick = (suggestion) => {
-    setNewTicket({ ...newTicket, message: suggestion });
+    setNewTicket({ ...newTicket, subject: suggestion, message: suggestion });
   };
 
   const handleCreate = () => { if (!newTicket.subject || !newTicket.message) return; setSending(true); supportApi.createTicket({ userId: user.id, ...newTicket }).then(() => { setShowNew(false); setNewTicket({ subject: '', category: 'delivery', message: '' }); setSuggestions([]); fetchTickets(); }).finally(() => setSending(false)); };
@@ -96,9 +103,19 @@ export default function Support() {
           <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>Create Support Ticket</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <input placeholder="Subject" value={newTicket.subject} onChange={e => setNewTicket({ ...newTicket, subject: e.target.value })} style={inp} />
-            <select value={newTicket.category} onChange={e => handleCategoryChange(e.target.value)} style={inp}>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-            </select>
+            <div style={{ position: 'relative' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {CATEGORIES.map(c => (
+                  <button key={c} onClick={() => handleCategoryChange(c)}
+                    style={{ padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      border: `1.5px solid ${newTicket.category === c ? C.accent : C.border}`,
+                      background: newTicket.category === c ? (isDark ? 'rgba(255,215,0,0.1)' : '#EFF6FF') : 'transparent',
+                      color: newTicket.category === c ? C.accent : C.sub }}>
+                    {c.charAt(0).toUpperCase() + c.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
             {suggestions.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>💡 Suggestions:</div>
